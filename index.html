@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>좋아회</title>
+<meta name="description" content="셋이 먹으러 간 기록을 직접 뽑아온 우표로 모으는 우표첩.">
+<meta name="theme-color" content="#E7EAEE" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#15191F" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="좋아회">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+
+<meta property="og:type" content="website">
+<meta property="og:title" content="좋아회">
+<meta property="og:description" content="셋이 먹으러 간 기록을 우표로 모으는 우표첩.">
+<meta property="og:image" content="og.png">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+
+<div class="wrap">
+  <header id="hdr" hidden>
+    <div class="brand">
+      <h1>좋아회</h1>
+      <button class="whoami" id="whoBtn"><span class="swatch" id="whoSw"></span><span id="whoNm"></span> ⋯</button>
+    </div>
+    <div class="seg" role="tablist">
+      <button role="tab" id="tabAlbum" aria-selected="true">우표첩</button>
+      <button role="tab" id="tabWish" aria-selected="false">가고 싶은 곳<span class="n" id="wishN"></span></button>
+      <button role="tab" id="tabMap" aria-selected="false">지도</button>
+    </div>
+  </header>
+  <main id="main"></main>
+</div>
+
+<div class="fab" id="fab" hidden><button id="fabBtn">＋ 우표 발행</button></div>
+<div id="sheets"></div>
+<div id="toasts"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+{
+  "name": "좋아회",
+  "short_name": "좋아회",
+  "description": "셋이 먹으러 간 기록을 직접 뽑아온 우표로 모으는 우표첩.",
+  "lang": "ko",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#E7EAEE",
+  "theme_color": "#E7EAEE",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}

@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" fill="#1F4E79"/>
+  <!-- 톱니 달린 우표 -->
+  <g transform="translate(256 256)">
+    <path fill="#F3EFE6" d="M-150-150h300v300h-300z"/>
+    <g fill="#1F4E79">
+      <circle cx="-120" cy="-150" r="15"/><circle cx="-60" cy="-150" r="15"/>
+      <circle cx="0" cy="-150" r="15"/><circle cx="60" cy="-150" r="15"/>
+      <circle cx="120" cy="-150" r="15"/>
+      <circle cx="-120" cy="150" r="15"/><circle cx="-60" cy="150" r="15"/>
+      <circle cx="0" cy="150" r="15"/><circle cx="60" cy="150" r="15"/>
+      <circle cx="120" cy="150" r="15"/>
+      <circle cx="-150" cy="-120" r="15"/><circle cx="-150" cy="-60" r="15"/>
+      <circle cx="-150" cy="0" r="15"/><circle cx="-150" cy="60" r="15"/>
+      <circle cx="-150" cy="120" r="15"/>
+      <circle cx="150" cy="-120" r="15"/><circle cx="150" cy="-60" r="15"/>
+      <circle cx="150" cy="0" r="15"/><circle cx="150" cy="60" r="15"/>
+      <circle cx="150" cy="120" r="15"/>
+    </g>
+    <!-- 회 한 점 -->
+    <path fill="#BE3A2B" d="M-78 28c22-52 72-84 134-92-14 54-54 92-104 100-18 3-34 1-30-8z"/>
+    <path fill="#E07B5F" d="M-78 28c16-26 42-46 76-58-10 28-30 50-56 58-12 4-23 4-20 0z"/>
+    <rect x="-82" y="52" width="164" height="12" rx="6" fill="#2F3A46"/>
+  </g>
+</svg>
