@@ -9,6 +9,8 @@
   --post:#BE3A2B;         /* 우체국 빨강 */
   --postal:#1F4E79;       /* 우체국 파랑 */
   --gold:#8A6A1F;
+  --map-land:#8E9CB0;     /* 지도 — 땅 */
+  --map-sea:#F2EFE8;      /* 지도 — 바다와 여백 (낡은 종이빛) */
   --m1:#BE3A2B; --m2:#1F4E79; --m3:#5E7033;
   --f-disp:"Gowun Batang",ui-serif,Georgia,serif;
   --f-body:"IBM Plex Sans KR",system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
@@ -19,12 +21,14 @@
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
   --album:#15191F; --paper:#212832; --ink:#E7EBF0; --ink-soft:#97A1AE; --line:#39424E;
   --post:#E0675A; --postal:#7FB2E0; --gold:#C9A75A;
+  --map-land:#46525F; --map-sea:#1A1F27;
   --m1:#E0675A; --m2:#7FB2E0; --m3:#9DB45F;
   color-scheme:dark;
 }}
 :root[data-theme="dark"]{
   --album:#15191F; --paper:#212832; --ink:#E7EBF0; --ink-soft:#97A1AE; --line:#39424E;
   --post:#E0675A; --postal:#7FB2E0; --gold:#C9A75A;
+  --map-land:#46525F; --map-sea:#1A1F27;
   --m1:#E0675A; --m2:#7FB2E0; --m3:#9DB45F;
   color-scheme:dark;
 }
@@ -137,20 +141,21 @@ header{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:va
   font-weight:500;overflow-wrap:anywhere}
 .mrow .st{font-family:var(--f-mono);font-size:11px;color:var(--ink-soft);white-space:nowrap}
 .mapwrap{background:var(--paper);border:1px solid var(--line);border-radius:3px;padding:8px;margin-bottom:12px}
-.mapsvg{width:100%;height:auto;display:block;aspect-ratio:1;touch-action:none}
+.mapsvg{width:100%;height:auto;display:block;aspect-ratio:1;touch-action:none;
+  background:var(--map-sea);border-radius:2px}
 /* 시군구 경계. 확대해도 선 굵기가 그대로이도록 non-scaling-stroke 를 쓴다.
    점 크기는 viewBox 크기에 맞춰 app.js 가 직접 계산한다 — 여기서 고정값을 주면 안 된다. */
-.mapsvg .ma{fill:var(--line);stroke:var(--paper);stroke-width:.7px;vector-effect:non-scaling-stroke}
+.mapsvg .ma{fill:var(--map-land);stroke:var(--map-sea);stroke-width:.7px;vector-effect:non-scaling-stroke}
 .mapsvg .ring{fill:none;stroke:var(--post)}
 /* 시군구 이름 — 확대했을 때만 나온다 (app.js 가 개수를 보고 정한다) */
-.mapsvg .ml{fill:var(--ink-soft);font-family:var(--f-body);pointer-events:none;opacity:.85}
+.mapsvg .ml{fill:var(--map-sea);font-family:var(--f-body);pointer-events:none;opacity:.95}
 .mapsvg .al{font-family:var(--f-mono);letter-spacing:.12em;fill:var(--ink-soft);
   user-select:none;-webkit-user-select:none}
 .mapsvg .al.drag{cursor:grab}
 .mapsvg .al.on{fill:var(--ink)}
 .mapsvg .pin{cursor:pointer}
 .mapsvg .pn{fill:var(--ink);font-family:var(--f-body);pointer-events:none;paint-order:stroke;
-  stroke:var(--paper);stroke-width:3px;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+  stroke:var(--map-sea);stroke-width:3px;stroke-linejoin:round;vector-effect:non-scaling-stroke}
 .mapsvg .sel{fill:none;stroke:var(--ink)}
 .maplegend{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:9px 3px 1px;font-size:11.5px;color:var(--ink-soft)}
 .maplegend .k{display:inline-flex;align-items:center;gap:5px}
