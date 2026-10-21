@@ -672,11 +672,98 @@ function mapViewBox(pts){
   return {x:cx-side/2, y:cy-side/2, w:side, h:side};
 }
 
+/* ── 가까이 보기 — 카카오 지도 ───────────────────────────────
+ * 호수·강·도로가 보여야 동네가 읽힌다. 시군구 경계만으로는 시(市) 하나를
+ * 확대했을 때 빈 면이 된다 (춘천처럼 구가 없는 곳).
+ * 한 번 만든 지도 DOM 은 계속 다시 쓴다 — 화면을 다시 그릴 때마다 새로 만들면
+ * 깜빡이고 쿼터만 먹는다.
+ */
+var kmapHost=null, kmapObj=null, kmapMarks=[], kmapSig="", kmapTried=false;
+
+function kakaoFit(pts){
+  var K=window.kakao.maps;
+  if(pts.length===1){
+    kmapObj.setCenter(new K.LatLng(pts[0].s.lat,pts[0].s.lng));
+    kmapObj.setLevel(5);
+    return;
+  }
+  var b=new K.LatLngBounds();
+  pts.forEach(function(p){ b.extend(new K.LatLng(p.s.lat,p.s.lng)); });
+  kmapObj.setBounds(b,34,34,34,34);
+}
+function kakaoMarks(pts){
+  var K=window.kakao.maps;
+  kmapMarks.forEach(function(o){ o.setMap(null); });
+  kmapMarks=[];
+  pts.forEach(function(p){
+    var s=p.s;
+    var d=el("div","kpin"+(s.wish?" wish":"")+(selPin===s.id?" on":""));
+    d.appendChild(el("i"));
+    d.appendChild(el("span",null,s.name));
+    d.onclick=function(ev){ ev.stopPropagation(); selPin=(selPin===s.id?null:s.id); render(); };
+    var o=new K.CustomOverlay({
+      position:new K.LatLng(s.lat,s.lng), content:d, xAnchor:0, yAnchor:0.5, clickable:true
+    });
+    o.setMap(kmapObj);
+    kmapMarks.push(o);
+  });
+}
+function buildKakaoMap(pts){
+  if(!kmapHost) kmapHost=el("div","kmap");
+  var sig=pts.map(function(p){ return p.s.id+":"+p.s.lat+","+p.s.lng; }).join("|");
+  // 지도는 DOM 에 붙고 크기가 생긴 뒤에 만들어야 한다.
+  setTimeout(function(){
+    if(!kmapHost.isConnected) return;
+    try{
+      if(!kmapObj){
+        kmapObj=new window.kakao.maps.Map(kmapHost,{
+          center:new window.kakao.maps.LatLng(pts[0].s.lat,pts[0].s.lng), level:6
+        });
+      }else{
+        kmapObj.relayout();
+      }
+      kakaoMarks(pts);
+      if(sig!==kmapSig){ kmapSig=sig; kakaoFit(pts); }
+    }catch(e){}
+  },0);
+  return kmapHost;
+}
+
+function mapLegend(extra){
+  var lg=el("div","maplegend");
+  [["다녀온 곳","var(--postal)"],["가고 싶은 곳","var(--post)"]].forEach(function(pair){
+    var k=el("span","k");
+    var i2=document.createElement("i"); i2.style.background=pair[1];
+    k.appendChild(i2); k.appendChild(el("span",null,pair[0]));
+    lg.appendChild(k);
+  });
+  var wb=el("button",null, mapWhole?"가까이 보기":"전국 보기");
+  wb.setAttribute("aria-pressed",String(mapWhole));
+  wb.onclick=function(){ mapWhole=!mapWhole; render(); };
+  lg.appendChild(wb);
+  if(extra) lg.appendChild(extra);
+  return lg;
+}
+
 function buildMap(list){
   var wrap=el("div","mapwrap");
   var pts=list.filter(hasPos).map(function(s){
     var p=projXY(s.lat,s.lng); p.s=s; return p;
   });
+
+  // 가까이 볼 때는 카카오 지도. 키가 없거나 좌표가 없으면 아래 전국 지도로 떨어진다.
+  if(!mapWhole && pts.length && kakaoKey()){
+    if(KAKAO.state==="ready"){
+      wrap.appendChild(buildKakaoMap(pts));
+      wrap.appendChild(mapLegend(null));
+      return wrap;
+    }
+    if(!kmapTried){
+      kmapTried=true;
+      loadKakao().then(function(ok){ if(ok) render(); });
+    }
+  }
+
   var vb=mapViewBox(pts);
   var svg=svgEl("svg",{
     viewBox:[vb.x,vb.y,vb.w,vb.h].map(function(n){ return n.toFixed(4); }).join(" "),
@@ -731,22 +818,10 @@ function buildMap(list){
   });
   wrap.appendChild(svg);
 
-  var lg=el("div","maplegend");
-  [["다녀온 곳","var(--postal)"],["가고 싶은 곳","var(--post)"]].forEach(function(pair){
-    var k=el("span","k");
-    var i2=document.createElement("i"); i2.style.background=pair[1];
-    k.appendChild(i2); k.appendChild(el("span",null,pair[0]));
-    lg.appendChild(k);
-  });
-  var wb=el("button",null, mapWhole?"가까이 보기":"전국 보기");
-  wb.setAttribute("aria-pressed",String(mapWhole));
-  wb.onclick=function(){ mapWhole=!mapWhole; render(); };
-  lg.appendChild(wb);
   var nb=el("button",null,"이름 보기");
   nb.setAttribute("aria-pressed",String(showNames));
   nb.onclick=function(){ showNames=!showNames; render(); };
-  lg.appendChild(nb);
-  wrap.appendChild(lg);
+  wrap.appendChild(mapLegend(nb));
   return wrap;
 }
 function pinCard(s){

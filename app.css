@@ -157,6 +157,17 @@ header{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:va
 .mapsvg .pn{fill:var(--ink);font-family:var(--f-body);pointer-events:none;paint-order:stroke;
   stroke:var(--map-sea);stroke-width:3px;stroke-linejoin:round;vector-effect:non-scaling-stroke}
 .mapsvg .sel{fill:none;stroke:var(--ink)}
+/* 카카오 지도 — 타일이 늘 밝으므로 그 위의 글자·점은 테마 변수를 쓰지 않는다 */
+.kmap{width:100%;aspect-ratio:1;border-radius:2px;overflow:hidden;background:var(--map-sea)}
+.kpin{display:flex;align-items:center;gap:4px;white-space:nowrap;cursor:pointer;transform:translateX(-7px)}
+.kpin i{flex:none;width:13px;height:13px;border-radius:50%;background:#1F4E79;border:2px solid #fff;
+  box-shadow:0 1px 3px rgba(16,24,36,.4);display:block}
+.kpin.wish i{background:#BE3A2B}
+.kpin span{font-size:11.5px;font-weight:600;color:#1B2430;background:rgba(255,255,255,.9);
+  border-radius:3px;padding:1px 5px;box-shadow:0 1px 2px rgba(16,24,36,.2)}
+.kpin.on i{width:17px;height:17px}
+.kpin.on span{background:#1B2430;color:#F3EFE6}
+
 .maplegend{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:9px 3px 1px;font-size:11.5px;color:var(--ink-soft)}
 .maplegend .k{display:inline-flex;align-items:center;gap:5px}
 .maplegend .k i{width:9px;height:9px;border-radius:50%;display:inline-block}
