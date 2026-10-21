@@ -1,0 +1,53 @@
+name: keepalive
+
+# Supabase 무료 프로젝트는 일주일 동안 아무도 들어오지 않으면 일시정지됩니다.
+# 한 달에 한 번 모이는 우리에게는 거의 항상 멈춰 있다는 뜻이라, 사흘마다
+# 한 번 가볍게 찔러서 깨어 있게 합니다. 따로 설정할 것은 없습니다 —
+# 키는 config.js 에서 읽습니다.
+#
+# 깃허브는 저장소에 60일 동안 아무 변화가 없으면 예약 작업을 꺼버립니다.
+# 그러면 Actions 탭에 다시 켜라는 배너가 뜨니, 버튼 한 번 누르면 됩니다.
+
+on:
+  schedule:
+    - cron: "17 3 */3 * *"   # 사흘마다 03:17 UTC (한국 낮 12:17)
+  workflow_dispatch:         # Actions 탭에서 손으로 돌려볼 수도 있습니다
+
+permissions:
+  contents: read
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: config.js 에서 키 읽기
+        id: cfg
+        run: |
+          url=$(grep -o 'SUPABASE_URL: *"[^"]*"'      config.js | sed 's/.*"\(.*\)"/\1/')
+          key=$(grep -o 'SUPABASE_ANON_KEY: *"[^"]*"' config.js | sed 's/.*"\(.*\)"/\1/')
+          if [ -z "$url" ] || [ -z "$key" ]; then
+            echo "config.js 가 아직 비어 있습니다 — 설정 전이니 건너뜁니다."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "::add-mask::$key"
+          echo "url=${url%/}" >> "$GITHUB_OUTPUT"
+          echo "key=$key"     >> "$GITHUB_OUTPUT"
+
+      - name: 깨우기
+        if: steps.cfg.outputs.skip != 'true'
+        env:
+          SB_URL: ${{ steps.cfg.outputs.url }}
+          SB_KEY: ${{ steps.cfg.outputs.key }}
+        run: |
+          code=$(curl -sS -m 30 -o /dev/null -w '%{http_code}' \
+            -H "apikey: $SB_KEY" \
+            "$SB_URL/rest/v1/settings?select=id&limit=1")
+          echo "HTTP $code"
+          if [ "$code" != "200" ]; then
+            echo "깨우지 못했습니다. Supabase 대시보드에서 프로젝트 상태를 확인하세요."
+            exit 1
+          fi
+          echo "깨어 있습니다."
