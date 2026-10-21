@@ -21,7 +21,7 @@ var AREA_UNSET = "동네 미지정";
 var me = null;
 var tab = "album", year = null, onlyTemp = false, showFolded = false;
 var sheet = null, busy = false;
-var selPin = null, showNames = false;
+var selPin = null, showNames = false, mapWhole = false;
 
 /* ── 유틸 ───────────────────────────────────────────────── */
 function $(s){ return document.querySelector(s); }
@@ -639,90 +639,95 @@ function svgEl(t,attrs){
   for(var k in attrs) n.setAttribute(k,attrs[k]);
   return n;
 }
-function hashStr(s){
-  s=String(s); var h=0;
-  for(var i=0;i<s.length;i++) h=(h*31+s.charCodeAt(i))|0;
-  return Math.abs(h);
+/* ── 지도 ───────────────────────────────────────────────────
+ * korea.js 가 들고 있는 시군구 경계 위에 가게 좌표를 찍는다.
+ * 투영은 korea.js 를 만든 것과 반드시 같아야 한다: x = 경도 × k, y = -위도.
+ * 좌표는 가게 검색(카카오)으로 고를 때만 들어온다. 없는 가게는 지도에 안 찍히고
+ * 아래 동네 목록에만 남는다.
+ */
+function projXY(lat,lng){
+  var k=(window.KOREA&&window.KOREA.k)||0.809017;
+  return {x:lng*k, y:-lat};
 }
-function areaPosOf(name){
-  var saved=(settings().areaPos||{})[name];
-  if(saved && typeof saved.x==="number" && typeof saved.y==="number") return {x:saved.x,y:saved.y};
-  var h=hashStr(name);
-  return {x:20+(h%61), y:24+((h>>7)%57)};
+function hasPos(s){ return typeof s.lat==="number" && typeof s.lng==="number"; }
+
+/* 점이 모인 범위에 맞춘 정사각 viewBox. 점이 없거나 「전국 보기」면 나라 전체. */
+function mapViewBox(pts){
+  var kb=(window.KOREA&&window.KOREA.box)||[100.8,-38.7,105.9,-33.1];
+  var whole={x:kb[0],y:kb[1],w:kb[2]-kb[0],h:kb[3]-kb[1]};
+  var wholeSide=Math.max(whole.w,whole.h);
+  whole={x:(kb[0]+kb[2])/2-wholeSide/2, y:(kb[1]+kb[3])/2-wholeSide/2, w:wholeSide, h:wholeSide};
+  if(mapWhole || !pts.length) return whole;
+  var minx=Infinity,miny=Infinity,maxx=-Infinity,maxy=-Infinity;
+  pts.forEach(function(p){
+    if(p.x<minx) minx=p.x;
+    if(p.x>maxx) maxx=p.x;
+    if(p.y<miny) miny=p.y;
+    if(p.y>maxy) maxy=p.y;
+  });
+  var cx=(minx+maxx)/2, cy=(miny+maxy)/2;
+  // 한 점뿐이어도 너무 깊이 들어가지 않게 최소 폭을 둔다 (약 7km)
+  var side=Math.max(maxx-minx, maxy-miny, 0.06)*1.45;
+  side=Math.min(side, wholeSide);
+  return {x:cx-side/2, y:cy-side/2, w:side, h:side};
 }
-function clusterR(n){ return n<=1?4:n<=4?8:10.5; }
-function shopOffset(i,n){
-  if(n<=1) return {dx:0,dy:0};
-  var a=(i/n)*Math.PI*2-Math.PI/2;
-  var r=n<=4?5.5:7.5;
-  return {dx:Math.cos(a)*r, dy:Math.sin(a)*r*0.85};
-}
-function startAreaDrag(e,key,svg,g,c){
-  e.preventDefault();
-  var t=e.currentTarget, last=null;
-  try{ t.setPointerCapture(e.pointerId); }catch(err){}
-  function move(ev){
-    var r=svg.getBoundingClientRect();
-    if(!r.width||!r.height) return;
-    var x=Math.max(8, Math.min(92,(ev.clientX-r.left)/r.width*100));
-    var y=Math.max(13,Math.min(94,(ev.clientY-r.top)/r.height*100));
-    last={x:x,y:y};
-    g.setAttribute("transform","translate("+(x-c.x).toFixed(2)+","+(y-c.y).toFixed(2)+")");
-  }
-  function up(){
-    t.removeEventListener("pointermove",move);
-    t.removeEventListener("pointerup",up);
-    t.removeEventListener("pointercancel",up);
-    if(!last) return;
-    var pos=Object.assign({}, settings().areaPos||{});
-    pos[key]={x:Math.round(last.x*10)/10, y:Math.round(last.y*10)/10};
-    guard(function(){ return DATA.saveSettings({areaPos:pos}); });
-  }
-  t.addEventListener("pointermove",move);
-  t.addEventListener("pointerup",up);
-  t.addEventListener("pointercancel",up);
-}
-function buildMap(groups,keys){
+
+function buildMap(list){
   var wrap=el("div","mapwrap");
-  var svg=svgEl("svg",{viewBox:"0 0 100 100","class":"mapsvg",role:"img","aria-label":"동네 지도"});
-  for(var i=1;i<10;i++){
-    svg.appendChild(svgEl("line",{"class":"gl",x1:i*10,y1:0,x2:i*10,y2:100}));
-    svg.appendChild(svgEl("line",{"class":"gl",x1:0,y1:i*10,x2:100,y2:i*10}));
-  }
+  var pts=list.filter(hasPos).map(function(s){
+    var p=projXY(s.lat,s.lng); p.s=s; return p;
+  });
+  var vb=mapViewBox(pts);
+  var svg=svgEl("svg",{
+    viewBox:[vb.x,vb.y,vb.w,vb.h].map(function(n){ return n.toFixed(4); }).join(" "),
+    "class":"mapsvg",role:"img","aria-label":"가게 지도"
+  });
   svg.addEventListener("click",function(){ if(selPin){ selPin=null; render(); } });
 
-  keys.forEach(function(k){
-    var arr=groups[k], c=areaPosOf(k), n=arr.length;
-    var g=svgEl("g",{});
-    g.appendChild(svgEl("circle",{"class":"ring",cx:c.x,cy:c.y,r:clusterR(n)}));
-    arr.forEach(function(s,i){
-      var o=shopOffset(i,n), x=c.x+o.dx, y=c.y+o.dy, wish=!!s.wish;
-      if(wish && likeScore(s)>=3){
-        var ring=svgEl("circle",{cx:x,cy:y,r:3.1,"stroke-width":0.35});
-        ring.style.fill="none"; ring.style.stroke="var(--post)";
-        g.appendChild(ring);
-      }
-      var p=svgEl("circle",{"class":"pin",cx:x,cy:y,r:1.9,tabindex:"0",role:"button","aria-label":s.name});
-      p.style.fill=wish?"var(--post)":"var(--postal)";
-      function open(ev){ ev.stopPropagation(); selPin=(selPin===s.id?null:s.id); render(); }
-      p.addEventListener("click",open);
-      p.addEventListener("keydown",function(ev){
-        if(ev.key==="Enter"||ev.key===" "){ ev.preventDefault(); open(ev); }
-      });
-      g.appendChild(p);
-      if(selPin===s.id) g.appendChild(svgEl("circle",{"class":"sel",cx:x,cy:y,r:3.6}));
-      if(showNames){
-        var t=svgEl("text",{"class":"pn",x:x+2.9,y:y+1});
-        t.textContent=s.name;
-        g.appendChild(t);
-      }
+  var areas=(window.KOREA&&window.KOREA.areas)||[];
+  areas.forEach(function(a){
+    svg.appendChild(svgEl("path",{"class":"ma",d:a[1]}));
+  });
+
+  // 점 크기는 viewBox 를 따라간다 — 확대해도 화면에서 같은 크기로 보이게.
+  var u=vb.w, R=u*0.016;
+
+  /* 확대해서 몇 개 안 보일 때만 시군구 이름을 적는다.
+     전국 보기에서 251개를 다 적으면 글자밭이 된다. */
+  var inView=areas.filter(function(a){
+    return a[2]>=vb.x && a[2]<=vb.x+vb.w && a[3]>=vb.y && a[3]<=vb.y+vb.h;
+  });
+  if(inView.length && inView.length<=28){
+    inView.forEach(function(a){
+      var t=svgEl("text",{"class":"ml",x:a[2],y:a[3],"text-anchor":"middle"});
+      t.style.fontSize=(u*0.033)+"px";
+      t.textContent=a[0];
+      svg.appendChild(t);
     });
-    var cls="al"+(arr.some(function(s){ return s.id===selPin; })?" on":"")+(isAdmin()?" drag":"");
-    var lab=svgEl("text",{"class":cls,x:c.x,y:c.y-clusterR(n)-2.6,"text-anchor":"middle"});
-    lab.textContent=k;
-    if(isAdmin()) lab.addEventListener("pointerdown",function(e){ startAreaDrag(e,k,svg,g,c); });
-    g.appendChild(lab);
-    svg.appendChild(g);
+  }
+  pts.forEach(function(p){
+    var s=p.s, wish=!!s.wish;
+    if(wish && likeScore(s)>=3){
+      var ring=svgEl("circle",{"class":"ring",cx:p.x,cy:p.y,r:R*1.9,"stroke-width":u*0.004});
+      svg.appendChild(ring);
+    }
+    var c=svgEl("circle",{"class":"pin",cx:p.x,cy:p.y,r:R,tabindex:"0",role:"button","aria-label":s.name});
+    c.style.fill=wish?"var(--post)":"var(--postal)";
+    function open(ev){ ev.stopPropagation(); selPin=(selPin===s.id?null:s.id); render(); }
+    c.addEventListener("click",open);
+    c.addEventListener("keydown",function(ev){
+      if(ev.key==="Enter"||ev.key===" "){ ev.preventDefault(); open(ev); }
+    });
+    svg.appendChild(c);
+    if(selPin===s.id){
+      svg.appendChild(svgEl("circle",{"class":"sel",cx:p.x,cy:p.y,r:R*2.3,"stroke-width":u*0.005}));
+    }
+    if(showNames){
+      var t=svgEl("text",{"class":"pn",x:p.x+R*1.7,y:p.y+R*0.9});
+      t.style.fontSize=(u*0.03)+"px";
+      t.textContent=s.name;
+      svg.appendChild(t);
+    }
   });
   wrap.appendChild(svg);
 
@@ -733,6 +738,10 @@ function buildMap(groups,keys){
     k.appendChild(i2); k.appendChild(el("span",null,pair[0]));
     lg.appendChild(k);
   });
+  var wb=el("button",null, mapWhole?"가까이 보기":"전국 보기");
+  wb.setAttribute("aria-pressed",String(mapWhole));
+  wb.onclick=function(){ mapWhole=!mapWhole; render(); };
+  lg.appendChild(wb);
   var nb=el("button",null,"이름 보기");
   nb.setAttribute("aria-pressed",String(showNames));
   nb.onclick=function(){ showNames=!showNames; render(); };
@@ -808,12 +817,15 @@ function viewMap(){
     " · 다녀온 곳 "+been+" · 가고 싶은 곳 "+want));
   frag.appendChild(top);
 
-  frag.appendChild(buildMap(groups,keys));
+  frag.appendChild(buildMap(list));
   var sel=selPin?list.filter(function(s){ return s.id===selPin; })[0]:null;
   if(sel) frag.appendChild(pinCard(sel));
-  else frag.appendChild(el("div","hint", isAdmin()
-    ? "점을 누르면 가게가 보이고, 동네 이름을 끌면 그 묶음이 옮겨집니다. 위치는 셋이 함께 씁니다."
-    : "점을 누르면 가게가 보입니다. 동네 위치는 관리자가 정합니다."));
+  else{
+    var noPos=list.filter(function(s){ return !hasPos(s); }).length;
+    frag.appendChild(el("div","hint", noPos
+      ? "점을 누르면 가게가 보입니다. 좌표가 없는 "+noPos+"곳은 아래 목록에만 있어요 — 가게를 열어 「가게 찾기」로 다시 고르면 지도에 찍힙니다."
+      : "점을 누르면 가게가 보입니다."));
+  }
 
   keys.forEach(function(k){
     var g=el("div","mgroup");

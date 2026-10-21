@@ -9,6 +9,7 @@ index.html                     앱 껍데기
 app.css                        스타일
 app.js                         화면 (우표첩 · 가고 싶은 곳 · 지도 · 시트)
 data.js                        데이터 계층 — Supabase는 이 파일에만 묶여 있음
+korea.js                       지도 데이터 — 시군구 경계 251개 (손으로 고치지 않음)
 config.js                      ← 여기 두 줄만 채우면 됩니다
 manifest.webmanifest           홈 화면에 추가용
 icon.svg                       앱 아이콘
