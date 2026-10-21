@@ -16,6 +16,8 @@ var DATA = window.DATA = {
   error: "",
   isAdmin: false,
   email: "",
+  gid: "app",        // 지금 보고 있는 모임. app.js 가 기기에 저장해 두고 넣어준다.
+  groups: [],
   settings: null,
   shops: [],
   stamps: [],
@@ -28,11 +30,14 @@ DATA.configured = function(){
 };
 
 /* ── 정규화 ─────────────────────────────────────────────── */
+/* settings 행 하나 = 모임 하나. id 가 모임 키다. */
 function normSettings(r){
   r = r || {};
   return {
+    id: r.id || "app",
+    name: r.name || "좋아회",
     style: r.style || "B",
-    members: r.members || [{id:"m1",name:""},{id:"m2",name:""},{id:"m3",name:""}],
+    members: r.members || [],
     refStampIds: r.ref_stamp_ids || [],
     areaPos: r.area_pos || {}
   };
@@ -47,13 +52,14 @@ function normShop(r){
   return {
     id: r.id, name: r.name || "", wish: !!r.wish, proposer: r.proposer || "",
     folded: !!r.folded, reason: r.reason || "", url: r.url || "", area: r.area || "",
-    lat: num(r.lat), lng: num(r.lng),
+    lat: num(r.lat), lng: num(r.lng), gid: r.gid || "app",
     createdAt: r.created_at, visitedAt: r.visited_at
   };
 }
 function normStamp(r){
   return {
-    id: r.id, shopId: r.shop_id, shopName: r.shop_name || "", date: r.date || "",
+    id: r.id, gid: r.gid || "app",
+    shopId: r.shop_id, shopName: r.shop_name || "", date: r.date || "",
     attendees: r.attendees || [], foodKo: r.food_ko || "", foodEn: r.food_en || "",
     color: r.color || "", photoPaths: r.photo_paths || [], artPath: r.art_path || null,
     promptVer: r.prompt_ver || "", by: r.by_member || "", createdAt: r.created_at
@@ -93,7 +99,7 @@ function fire(){ if(notify) notify(); }
 
 function refreshAll(){
   return Promise.all([
-    sb.from("settings").select("*").eq("id","app").maybeSingle(),
+    sb.from("settings").select("*"),
     sb.from("shops").select("*"),
     sb.from("stamps").select("*"),
     sb.from("notes").select("*"),
@@ -101,13 +107,39 @@ function refreshAll(){
   ]).then(function(r){
     var bad = r.find(function(x){ return x.error; });
     if(bad) throw bad.error;
-    DATA.settings = normSettings(r[0].data);
+    // 모임이 몇 개 안 되고 데이터도 작아서 전부 받아온 뒤 화면에서 가른다.
+    // 모임을 바꿀 때 다시 받아올 필요가 없다.
+    DATA.groups = (r[0].data || []).map(normSettings)
+      .sort(function(a,b){ return a.id==="app" ? -1 : b.id==="app" ? 1 : a.name.localeCompare(b.name,"ko"); });
+    if(!DATA.groups.length) DATA.groups = [normSettings({id:"app"})];
+    if(!DATA.groups.some(function(g){ return g.id===DATA.gid; })) DATA.gid = DATA.groups[0].id;
+    DATA.settings = DATA.groups.filter(function(g){ return g.id===DATA.gid; })[0];
     DATA.shops  = (r[1].data || []).map(normShop);
     DATA.stamps = (r[2].data || []).map(normStamp);
     DATA.notes  = r[3].data || [];
     DATA.likes  = r[4].data || [];
   });
 }
+/* 모임 바꾸기 — 받아온 데이터를 다시 가르기만 한다 */
+DATA.setGid = function(gid){
+  DATA.gid = gid;
+  var g = DATA.groups.filter(function(x){ return x.id===gid; })[0];
+  if(g) DATA.settings = g;
+};
+DATA.addGroup = function(name){
+  var id = "g" + Date.now().toString(36) + Math.random().toString(36).slice(2,6);
+  return sb.from("settings").insert({ id: id, name: name, members: [] }).then(function(r){
+    if(r.error) throw r.error;
+    return reload().then(function(){ return id; });
+  });
+};
+DATA.renameGroup = function(gid, name){
+  return sb.from("settings").update({ name: name, updated_at: new Date().toISOString() })
+    .eq("id", gid).then(function(r){
+      if(r.error) throw r.error;
+      return reload();
+    });
+};
 
 function subscribe(){
   sb.channel("joahoe")
@@ -157,9 +189,9 @@ function snakeSettings(p){
   return o;
 }
 DATA.saveSettings = function(patch){
-  // upsert — settings 행이 없어도 스스로 만든다 (스키마를 늦게 돌린 경우 대비)
+  // upsert — 지금 보고 있는 모임의 행. 없어도 스스로 만든다.
   var row = snakeSettings(patch);
-  row.id = "app";
+  row.id = DATA.gid;
   return sb.from("settings").upsert(row, { onConflict: "id" }).then(function(r){
     if(r.error) throw r.error;
     return reload();
@@ -172,6 +204,9 @@ DATA.addShop = function(s){
     folded: false, reason: s.reason || "", url: s.url || "", area: s.area || "",
     visited_at: s.wish === false ? new Date().toISOString() : null
   };
+  // 기본 모임이면 gid 를 안 보낸다 — 컬럼 기본값이 'app' 이라 결과가 같고,
+  // 스키마를 아직 안 돌린 상태에서도 추가가 막히지 않는다.
+  if(DATA.gid && DATA.gid !== "app") row.gid = DATA.gid;
   // 좌표는 있을 때만 싣는다. 스키마를 아직 안 돌렸어도 추가가 막히지 않게.
   var la = num(s.lat), ln = num(s.lng);
   if(la !== null && ln !== null){ row.lat = la; row.lng = ln; }
@@ -202,12 +237,14 @@ DATA.deleteShop = function(id){
 };
 
 DATA.addStamp = function(s){
-  return sb.from("stamps").insert({
+  var row = {
     shop_id: s.shopId, shop_name: s.shopName, date: s.date,
     attendees: s.attendees || [], food_ko: s.foodKo || "", food_en: s.foodEn || "",
     color: s.color || "", photo_paths: s.photoPaths || [], art_path: s.artPath || null,
     prompt_ver: s.promptVer || "", by_member: s.by || ""
-  }).then(function(r){
+  };
+  if(DATA.gid && DATA.gid !== "app") row.gid = DATA.gid;
+  return sb.from("stamps").insert(row).then(function(r){
     if(r.error) throw r.error;
     return reload();
   });

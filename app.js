@@ -6,7 +6,29 @@
 (function(){
 "use strict";
 
-var MEMBERS = [{id:"m1",v:"--m1"},{id:"m2",v:"--m2"},{id:"m3",v:"--m3"}];
+/* 멤버는 모임마다 다르고 수도 달라진다. settings.members 가 유일한 출처.
+   [{id,name,c}] — c 는 색 팔레트(--mc0..--mc7) 번호. */
+var MC = 8;
+function members(){
+  // 색(c)이 없던 옛 데이터는 순서대로 칠한다 — 예전 m1·m2·m3 색과 같아진다.
+  return (settings().members||[])
+    .filter(function(m){ return m && m.id; })
+    .map(function(m,i){
+      return {id:m.id, name:m.name||"", c:(typeof m.c==="number"?m.c:i)%MC};
+    });
+}
+function memberIds(){ return members().map(function(m){ return m.id; }); }
+function memberCount(){ return members().length; }
+function nextMemberId(){
+  var used={}; members().forEach(function(m){ used[m.id]=1; });
+  for(var i=1;i<200;i++){ if(!used["m"+i]) return "m"+i; }
+  return "m"+Date.now();
+}
+function freeColor(){
+  var used={}; members().forEach(function(m){ used[(m.c|0)%MC]=1; });
+  for(var i=0;i<MC;i++){ if(!used[i]) return i; }
+  return members().length%MC;
+}
 var COLORS = [
   {key:"brick",   ko:"벽돌색",     en:"brick red",     hex:"#B6422F"},
   {key:"mustard", ko:"머스터드",   en:"mustard yellow",hex:"#C99A2E"},
@@ -16,6 +38,8 @@ var COLORS = [
   {key:"plum",    ko:"플럼",       en:"plum purple",   hex:"#7A4A74"}
 ];
 var LS_ME = "joahoe.me";
+var LS_GID = "joahoe.gid";
+var LS_RECO = "joahoe.reco";   // 추천 기준 좌표 {lat,lng,label}
 var AREA_UNSET = "동네 미지정";
 
 var me = null;
@@ -49,14 +73,14 @@ function toast(msg){
   setTimeout(function(){ t.remove(); }, 2600);
 }
 function colorOf(k){ return COLORS.filter(function(c){ return c.key===k; })[0] || null; }
-function settings(){ return DATA.settings || {style:"B",members:[],refStampIds:[],areaPos:{}}; }
+function settings(){ return DATA.settings || {id:"app",name:"좋아회",style:"B",members:[],refStampIds:[],areaPos:{}}; }
 function memberName(id){
   var m=(settings().members||[]).filter(function(x){ return x.id===id; })[0];
   return (m && m.name) || "";
 }
 function memberVar(id){
-  var m=MEMBERS.filter(function(x){ return x.id===id; })[0];
-  return m ? "var("+m.v+")" : "var(--ink-soft)";
+  var m=members().filter(function(x){ return x.id===id; })[0];
+  return m ? "var(--mc"+((m.c|0)%MC)+")" : "var(--ink-soft)";
 }
 function isAdmin(){ return !!DATA.isAdmin; }
 
@@ -287,10 +311,73 @@ function placeSearch(onPick,hintText){
   return box;
 }
 
+/* ── 추천 — 위시에 넣을 거리를 찾는다 ─────────────────────
+ * 카카오는 평점이나 인기 순위를 주지 않는다. 그래서 이건 "맛집을 골라주는" 기능이
+ * 아니라 "이 동네에 이런 집들이 있다"를 펼쳐주는 기능이다. 고르는 건 사람 몫.
+ */
+var RECO_CATS=[
+  {ko:"아무거나", kw:null},
+  {ko:"고기",     kw:"고깃집"},
+  {ko:"튀김·전",  kw:"전집"},
+  {ko:"면",       kw:"국수"},
+  {ko:"해산물",   kw:"회"},
+  {ko:"찌개",     kw:"찌개"},
+  {ko:"디저트",   kw:"디저트"}
+];
+/* 기준 좌표 — 가게들의 평균. 없으면 기기에 저장해 둔 것. */
+function recoCenter(){
+  var pts=shops().filter(hasPos);
+  if(pts.length){
+    var la=0, ln=0;
+    pts.forEach(function(s){ la+=s.lat; ln+=s.lng; });
+    return {lat:la/pts.length, lng:ln/pts.length, label:"우리 가게들"};
+  }
+  try{
+    var o=JSON.parse(lsGet(LS_RECO)||"null");
+    if(o && typeof o.lat==="number") return o;
+  }catch(e){}
+  return null;
+}
+function recoSearch(kw,center){
+  return loadKakao().then(function(ok){
+    if(!ok) return null;
+    return new Promise(function(res){
+      try{
+        var K=window.kakao.maps, ps=new K.services.Places();
+        var opt={ location:new K.LatLng(center.lat,center.lng), radius:5000,
+                  sort:K.services.SortBy.DISTANCE };
+        function done(d,st){ res(st===K.services.Status.OK ? d : []); }
+        if(kw) ps.keywordSearch(kw,done,opt);
+        else ps.categorySearch("FD6",done,opt);
+      }catch(e){ res(null); }
+    });
+  });
+}
+function knownName(n){
+  var s=String(n||"").trim();
+  return shops().some(function(x){ return String(x.name).trim()===s; });
+}
+function recoAdd(r){
+  return DATA.addShop({
+    name:r.place_name, wish:true, proposer:me, reason:"",
+    url:naverSearchUrl(r.place_name),
+    area:areaFromAddr(r.address_name||r.road_address_name),
+    lat:Number(r.y), lng:Number(r.x)
+  }).then(function(id){ return id ? DATA.setLike(id,me,true) : null; });
+}
+function metres(d){
+  var n=Number(d);
+  if(!isFinite(n)) return "";
+  return n<1000 ? (n+"m") : ((n/1000).toFixed(1)+"km");
+}
+
 /* ── 데이터 뷰 ──────────────────────────────────────────── */
-function stamps(){ return DATA.stamps; }
-function shops(){ return DATA.shops; }
-function likeScore(s){ return DATA.likesOf(s.id).length; }
+/* 지금 보고 있는 모임 것만 본다 */
+function stamps(){ return DATA.stamps.filter(function(x){ return (x.gid||"app")===DATA.gid; }); }
+function shops(){ return DATA.shops.filter(function(x){ return (x.gid||"app")===DATA.gid; }); }
+function likeScore(s){ return DATA.likesOf(s.id).filter(function(m){ return memberIds().indexOf(m)>=0; }).length; }
+/* 만장일치 = 그 모임 멤버 전원. 멤버가 없으면 만장일치도 없다. */
+function allLiked(s){ var n=memberCount(); return n>0 && likeScore(s)>=n; }
 function currentYears(){
   var ys={}, out=[];
   stamps().forEach(function(s){ var y=String(s.date||"").slice(0,4); if(y) ys[y]=1; });
@@ -324,9 +411,10 @@ function render(){
   }
 
   var named=(settings().members||[]).some(function(m){ return m.name; });
-  var usable=named && me && MEMBERS.some(function(m){ return m.id===me; });
+  var usable=named && me && members().some(function(m){ return m.id===me; });
   $("#hdr").hidden=!usable;
   $("#fab").hidden=!usable || tab!=="album" || !isAdmin();
+  var t=$(".brand h1"); if(t) t.textContent=settings().name||"좋아회";
 
   main.innerHTML="";
   if(!named){ main.appendChild(viewSetup()); return; }
@@ -375,32 +463,38 @@ function viewSetup(){
   var d=el("div","center");
   if(!isAdmin()){
     d.appendChild(el("h2",null,"아직 준비 중이에요"));
-    d.appendChild(el("p",null,"관리자가 셋의 이름을 넣으면 우표첩이 열립니다."));
+    d.appendChild(el("p",null,"관리자가 멤버 이름을 넣으면 우표첩이 열립니다."));
     var lb=el("button","btn ghost","관리자 로그인");
     lb.onclick=function(){ openSheet({k:"login"}); };
     d.appendChild(lb);
     return d;
   }
-  d.appendChild(el("h2",null,"셋의 이름을 적어주세요"));
-  d.appendChild(el("p",null,"우표에 참석 표시로 들어갑니다. 나중에 바꿀 수 있어요."));
+  d.appendChild(el("h2",null,settings().name+" — 멤버를 적어주세요"));
+  d.appendChild(el("p",null,"우표에 참석 표시로 들어갑니다. 나중에 더하거나 바꿀 수 있어요."));
   var f=el("div","form");
-  var ins=MEMBERS.map(function(m,i){
+  var draft=members().slice();
+  while(draft.length<3) draft.push({id:nextMemberId(),name:"",c:(draft.length)%MC});
+  var ins=draft.map(function(m,i){
     var l=el("label","fld");
     l.appendChild(el("span",null,"멤버 "+(i+1)));
     var inp=document.createElement("input");
-    inp.id="su_"+m.id; inp.maxLength=8; inp.placeholder=["나","민","수"][i];
+    inp.id="su_"+m.id; inp.maxLength=8; inp.value=m.name||"";
+    inp.placeholder=["나","민","수"][i]||("멤버 "+(i+1));
     l.appendChild(inp); f.appendChild(l);
     return inp;
   });
   var b=el("button","btn","시작하기");
   b.onclick=function(){
-    var names=ins.map(function(x){ return x.value.trim(); });
-    if(names.filter(Boolean).length<3){ toast("세 명 모두 적어주세요."); return; }
-    guard(function(){
-      return DATA.saveSettings({ members: MEMBERS.map(function(m,i){ return {id:m.id,name:names[i]}; }) });
+    var out=[];
+    draft.forEach(function(m,i){
+      var nm=ins[i].value.trim();
+      if(nm) out.push({id:m.id,name:nm,c:(m.c|0)%MC});
     });
+    if(out.length<2){ toast("적어도 두 명은 적어주세요."); return; }
+    guard(function(){ return DATA.saveSettings({members:out}); });
   };
   f.appendChild(b);
+  f.appendChild(el("div","hint","빈 칸은 건너뜁니다. 멤버는 설정에서 더 넣을 수 있어요."));
   d.appendChild(f);
   return d;
 }
@@ -410,7 +504,7 @@ function viewWho(){
   d.appendChild(el("h2",null,"누구세요?"));
   d.appendChild(el("p",null,"이 기기에만 저장돼요."));
   var w=el("div","who3");
-  MEMBERS.forEach(function(m){
+  members().forEach(function(m){
     var b=el("button");
     var sw=el("span","swatch"); sw.style.background=memberVar(m.id);
     b.appendChild(sw);
@@ -520,7 +614,7 @@ function cellFor(st){
 
 function dotsEl(att){
   var d=el("div","dots");
-  MEMBERS.forEach(function(m){
+  members().forEach(function(m){
     var on=att.indexOf(m.id)>=0;
     var x=el("span","dot"+(on?" on":""));
     if(on) x.style.background=memberVar(m.id);
@@ -537,20 +631,20 @@ function viewWish(){
     return likeScore(b)-likeScore(a) ||
            String(b.createdAt||"").localeCompare(String(a.createdAt||""));
   });
-  var hit=all.filter(function(s){ return likeScore(s)>=3; });
-  var rest=all.filter(function(s){ return likeScore(s)<3; });
+  var hit=all.filter(allLiked);
+  var rest=all.filter(function(s){ return !allLiked(s); });
 
   if(!all.length){
     var e=el("div","empty");
     e.appendChild(el("div","t","가고 싶은 곳이 없어요"));
-    e.appendChild(el("div","s","셋 다 👍 하면 맨 위에서 반짝입니다. 그게 다음 약속이 돼요."));
+    e.appendChild(el("div","s","모두 👍 하면 맨 위에서 반짝입니다. 그게 다음 약속이 돼요."));
     var ab=el("button","btn sm","＋ 추가");
     ab.onclick=function(){ openSheet({k:"wish"}); };
     e.appendChild(ab);
     frag.appendChild(e);
   }else{
     if(hit.length){
-      frag.appendChild(el("div","sect","★ 셋 다 가고 싶은 곳"));
+      frag.appendChild(el("div","sect","★ 모두 가고 싶은 곳"));
       var w1=el("div","wish");
       hit.forEach(function(s){ w1.appendChild(wishCard(s,true)); });
       frag.appendChild(w1);
@@ -582,6 +676,11 @@ function viewWish(){
   }
 
   var add=el("div","row2"); add.style.marginTop="18px";
+  if(kakaoKey()){
+    var rb=el("button","btn ghost","🎲 추천받기");
+    rb.onclick=function(){ openSheet({k:"reco"}); };
+    add.appendChild(rb);
+  }
   var a=el("button","btn ghost","＋ 추가");
   a.onclick=function(){ openSheet({k:"wish"}); };
   add.appendChild(a);
@@ -627,7 +726,9 @@ function toggleLike(s){
   var on=cur.indexOf(me)<0;
   guard(function(){
     return DATA.setLike(s.id,me,on).then(function(){
-      if(on && cur.length===2) toast("셋 다 가고 싶은 집이 생겼어요. 단톡방에 알리세요!");
+      if(on && memberCount()>1 && cur.length===memberCount()-1){
+        toast("모두 가고 싶은 집이 생겼어요. 단톡방에 알리세요!");
+      }
     });
   });
 }
@@ -794,7 +895,7 @@ function buildMap(list){
   }
   pts.forEach(function(p){
     var s=p.s, wish=!!s.wish;
-    if(wish && likeScore(s)>=3){
+    if(wish && allLiked(s)){
       var ring=svgEl("circle",{"class":"ring",cx:p.x,cy:p.y,r:R*1.9,"stroke-width":u*0.004});
       svg.appendChild(ring);
     }
@@ -830,7 +931,7 @@ function pinCard(s){
   var bits=[];
   if((s.area||"").trim()) bits.push(s.area.trim());
   if(s.wish){
-    bits.push("가고 싶은 곳 · 👍 "+likeScore(s)+"/3");
+    bits.push("가고 싶은 곳 · 👍 "+likeScore(s)+"/"+memberCount());
     if(s.reason) bits.push("“"+s.reason+"”");
   }else{
     bits.push("다녀온 곳 · 우표 "+stamps().filter(function(x){ return x.shopId===s.id; }).length+"장");
@@ -859,7 +960,7 @@ function shopRow(s){
   var ln=linkEl(s.url);
   if(ln) row.appendChild(ln);
   var cnt=stamps().filter(function(x){ return x.shopId===s.id; }).length;
-  row.appendChild(el("span","st",s.wish?("★ "+likeScore(s)+"/3"):("우표 "+cnt)));
+  row.appendChild(el("span","st",s.wish?("★ "+likeScore(s)+"/"+memberCount()):("우표 "+cnt)));
   return row;
 }
 
@@ -929,10 +1030,33 @@ function viewMap(){
 /* ── 시트 ───────────────────────────────────────────────── */
 function openSheet(s){ sheet=s; drawSheet(); }
 function closeSheet(){ sheet=null; drawSheet(); render(); }
+/* 시트 안에서 글자를 치고 있는 중인가.
+   한 줄 메모는 입력이 멎으면 저장되고, 저장되면 데이터가 새로 와서 화면을 다시 그린다.
+   그때 입력칸이 통째로 새로 만들어지면 모바일에서 키보드가 내려가 버린다. */
+function typingInSheet(){
+  var ae=document.activeElement, host=$("#sheets");
+  return !!(ae && host && host.contains(ae) &&
+            (ae.tagName==="INPUT" || ae.tagName==="TEXTAREA"));
+}
 function drawSheet(){
   var host=$("#sheets");
+  // 다시 그려야만 할 때를 대비한 안전망 — 포커스와 커서 자리를 되돌려 놓는다.
+  var ae=document.activeElement, keep=null;
+  if(ae && host.contains(ae) && (ae.tagName==="INPUT"||ae.tagName==="TEXTAREA") && ae.id){
+    keep={id:ae.id, v:ae.value, s:ae.selectionStart, e:ae.selectionEnd};
+  }
   host.innerHTML="";
   if(!sheet) return;
+  drawSheetBody(host);
+  if(keep){
+    var n=document.getElementById(keep.id);
+    if(n){
+      if(n.value!==keep.v) n.value=keep.v;
+      try{ n.focus({preventScroll:true}); n.setSelectionRange(keep.s,keep.e); }catch(e){}
+    }
+  }
+}
+function drawSheetBody(host){
   var w=el("div","sheet"), inn=el("div","in");
   w.appendChild(inn); host.appendChild(w);
   var bar=el("div","bar");
@@ -941,7 +1065,7 @@ function drawSheet(){
   bar.appendChild(h); bar.appendChild(x); inn.appendChild(bar);
   var body=el("div"); inn.appendChild(body);
   var map={"new":sheetNew,"detail":sheetDetail,"art":sheetArt,"wish":sheetWish,"shop":sheetShop,
-           "visited":sheetVisited,"settings":sheetSettings,"login":sheetLogin};
+           "visited":sheetVisited,"settings":sheetSettings,"login":sheetLogin,"reco":sheetReco};
   (map[sheet.k]||function(){})(h,body);
 }
 
@@ -1008,8 +1132,8 @@ function sheetNew(h,body){
   var lAtt=el("div","fld");
   lAtt.appendChild(el("span",null,"참석"));
   var pick=el("div","pick");
-  var att=MEMBERS.map(function(m){ return m.id; });
-  MEMBERS.forEach(function(m){
+  var att=memberIds();
+  members().forEach(function(m){
     var b=el("button"); b.type="button"; b.setAttribute("aria-pressed","true");
     var sw=el("span","swatch"); sw.style.background=memberVar(m.id);
     b.appendChild(sw); b.appendChild(el("span",null,memberName(m.id)||m.id));
@@ -1092,7 +1216,7 @@ function sheetDetail(h,body){
   f.appendChild(meta);
 
   var lines=el("div","lines");
-  MEMBERS.forEach(function(m){
+  members().forEach(function(m){
     var it=el("div","lineitem");
     var who=el("div","who",memberName(m.id)||m.id);
     who.style.color=memberVar(m.id);
@@ -1101,13 +1225,17 @@ function sheetDetail(h,body){
     if(m.id===me){
       var inp=document.createElement("input");
       inp.value=txt; inp.placeholder="한 줄 쓰기"; inp.maxLength=60; inp.id="line_"+st.id;
-      var timer=null;
-      inp.oninput=function(){
+      var timer=null, saved=txt;
+      function save(){
         clearTimeout(timer);
-        timer=setTimeout(function(){
-          guard(function(){ return DATA.setNote(st.id,m.id,inp.value.trim()); });
-        },700);
-      };
+        var v=inp.value.trim();
+        if(v===saved) return;
+        saved=v;
+        guard(function(){ return DATA.setNote(st.id,m.id,v); });
+      }
+      // 치는 동안에는 미루고, 칸을 떠날 때는 확실히 저장한다.
+      inp.oninput=function(){ clearTimeout(timer); timer=setTimeout(save,1200); };
+      inp.onblur=save;
       it.appendChild(inp);
     }else{
       it.appendChild(el("div","txt"+(txt?"":" none"),txt||"—"));
@@ -1547,13 +1675,200 @@ function sheetLogin(h,body){
   body.appendChild(f);
 }
 
+function sheetReco(h,body){
+  h.textContent="추천받기";
+  var f=el("div","form");
+  var center=recoCenter();
+  var catIdx=0, kw="", list=null, one=null, lastOne="", loading=false;
+
+  /* 기준 자리 */
+  var head=el("div","fld");
+  head.appendChild(el("span",null,"어디 둘레에서"));
+  var where=el("div","hint");
+  head.appendChild(where);
+  var ps=placeSearch(function(p){
+    center={lat:p.lat, lng:p.lng, label:p.name};
+    lsSet(LS_RECO, JSON.stringify(center));
+    list=null; one=null; draw(); run();
+  },"아무 가게나 찾아서 그 둘레로 기준을 옮길 수 있어요.");
+  f.appendChild(head);
+  if(ps) f.appendChild(ps);
+
+  /* 계열 칩 */
+  var chips=el("div","pick");
+  RECO_CATS.forEach(function(c,i){
+    var b=el("button",null,c.ko); b.type="button";
+    b.onclick=function(){ catIdx=i; kw=""; free.value=""; list=null; one=null; draw(); run(); };
+    chips.appendChild(b);
+  });
+  f.appendChild(el("div","sect","뭘 먹을까"));
+  f.appendChild(chips);
+
+  var fr=el("div","row2");
+  var free=document.createElement("input");
+  free.type="search"; free.id="recokw"; free.placeholder="직접 적기 — 예: 막국수";
+  var fb=el("button","btn ghost sm","찾기"); fb.type="button"; fb.style.flex="0 0 74px";
+  function runFree(){
+    var v=free.value.trim();
+    if(!v) return;
+    kw=v; catIdx=-1; list=null; one=null; draw(); run();
+  }
+  fb.onclick=runFree;
+  free.onkeydown=function(e){ if(e.key==="Enter"){ e.preventDefault(); runFree(); } };
+  fr.appendChild(free); fr.appendChild(fb);
+  f.appendChild(fr);
+
+  var dice=el("button","btn ghost","🎲 하나만 뽑기"); dice.type="button";
+  dice.onclick=function(){
+    if(!list || !list.length) return;
+    var pool=list.filter(function(r){ return r.place_name!==lastOne; });
+    if(!pool.length) pool=list;
+    one=pool[Math.floor(Math.random()*pool.length)];
+    lastOne=one.place_name;
+    draw();
+  };
+  f.appendChild(dice);
+
+  var out=el("div"); f.appendChild(out);
+  body.appendChild(f);
+
+  function run(){
+    if(!center){ draw(); return; }
+    loading=true; draw();
+    var q=(catIdx>=0 ? RECO_CATS[catIdx].kw : kw);
+    recoSearch(q,center).then(function(rs){
+      loading=false;
+      list=(rs===null) ? null : rs.filter(function(r){ return !knownName(r.place_name); });
+      one=null;
+      draw();
+    });
+  }
+
+  function draw(){
+    where.textContent = center
+      ? (center.label+" 둘레 5km")
+      : "기준이 없어요. 아래에서 가게를 하나 찾아 기준을 잡아주세요.";
+    Array.prototype.forEach.call(chips.children,function(b,i){
+      b.setAttribute("aria-pressed",String(i===catIdx));
+    });
+    dice.hidden = !(list && list.length);
+    out.innerHTML="";
+
+    if(!center) return;
+    if(loading){ out.appendChild(el("div","hint","찾는 중…")); return; }
+    if(list===null){ out.appendChild(el("div","hint","검색을 불러오지 못했어요.")); return; }
+    if(!list.length){
+      out.appendChild(el("div","hint","둘레에 새로 담을 만한 곳이 없어요. 다른 계열이나 직접 적기로 찾아보세요."));
+      return;
+    }
+    if(one) out.appendChild(recoCard(one,true));
+    out.appendChild(el("div","sect","둘레 "+list.length+"곳"));
+    var box=el("div","psr");
+    list.forEach(function(r){ box.appendChild(recoRow(r)); });
+    out.appendChild(box);
+    out.appendChild(el("div","hint","이미 담았거나 다녀온 집은 빼고 보여줍니다. 거리순이고, 맛 순위는 아닙니다."));
+  }
+
+  function shortCat(c){
+    var p=String(c||"").split(">").map(function(x){ return x.trim(); });
+    return p[p.length-1]||"";
+  }
+  function addBtn(r,big){
+    var b=el("button", big?"btn":"btn ghost sm", "＋ 담기"); b.type="button";
+    b.onclick=function(ev){
+      ev.stopPropagation();
+      b.disabled=true; b.textContent="담는 중…";
+      guard(function(){
+        return recoAdd(r).then(function(){
+          toast("가고 싶은 곳에 담았어요.");
+          list=list.filter(function(x){ return x.place_name!==r.place_name; });
+          if(one && one.place_name===r.place_name) one=null;
+          draw(); render();
+        });
+      });
+    };
+    return b;
+  }
+  function recoRow(r){
+    var row=el("div","psrow recorow");
+    var L=el("div","l");
+    L.appendChild(el("span","nm",r.place_name));
+    L.appendChild(el("span","ad",shortCat(r.category_name)+" · "+metres(r.distance)));
+    row.appendChild(L);
+    row.appendChild(addBtn(r,false));
+    return row;
+  }
+  function recoCard(r){
+    var c=el("div","pincard");
+    c.appendChild(el("div","nm",r.place_name));
+    c.appendChild(el("div","st",shortCat(r.category_name)+" · "+metres(r.distance)+
+      " · "+(r.road_address_name||r.address_name||"")));
+    var act=el("div","act");
+    var ln=linkEl(naverSearchUrl(r.place_name));
+    if(ln) act.appendChild(ln);
+    act.appendChild(addBtn(r,false));
+    c.appendChild(act);
+    return c;
+  }
+
+  draw();
+  if(center) run();
+}
+
 function sheetSettings(h,body){
   h.textContent="설정";
   var f=el("div","form");
 
+  /* 모임 — 고르기는 누구나, 만들고 이름 바꾸기는 관리자만.
+     모임끼리 서로 가려지지는 않는다 (친구들은 로그인을 하지 않는다). */
+  f.appendChild(el("div","sect","모임"));
+  var gs=el("div","pick");
+  (DATA.groups||[]).forEach(function(g){
+    var b=el("button"); b.type="button";
+    b.setAttribute("aria-pressed",String(DATA.gid===g.id));
+    b.appendChild(el("span",null,g.name));
+    b.onclick=function(){
+      if(DATA.gid===g.id) return;
+      DATA.setGid(g.id); lsSet(LS_GID,g.id);
+      // 모임마다 멤버가 다르다 — 지금 고른 "나" 가 새 모임에 없으면 다시 고르게 한다
+      if(!members().some(function(m){ return m.id===me; })){ me=null; lsSet(LS_ME,""); }
+      selPin=null; tab="album"; mapWhole=false; kmapSig="";
+      drawSheet(); render();
+    };
+    gs.appendChild(b);
+  });
+  f.appendChild(gs);
+  if(isAdmin()){
+    var gr=el("div","row2");
+    var gname=document.createElement("input");
+    gname.placeholder="새 모임 이름"; gname.maxLength=16;
+    var gadd=el("button","btn ghost","＋ 모임"); gadd.type="button";
+    gadd.onclick=function(){
+      var nm=gname.value.trim();
+      if(!nm){ toast("모임 이름을 적어주세요."); return; }
+      guard(function(){
+        return DATA.addGroup(nm).then(function(id){
+          DATA.setGid(id); lsSet(LS_GID,id);
+          me=null; lsSet(LS_ME,""); tab="album";
+          drawSheet(); render(); toast("모임을 만들었어요. 멤버부터 넣어주세요.");
+        });
+      });
+    };
+    gr.appendChild(gname); gr.appendChild(gadd);
+    f.appendChild(gr);
+    var ren=el("button","btn ghost sm","이 모임 이름 바꾸기"); ren.type="button";
+    ren.onclick=function(){
+      var nm=(window.prompt("모임 이름", settings().name)||"").trim();
+      if(!nm) return;
+      guard(function(){ return DATA.renameGroup(DATA.gid,nm).then(function(){ drawSheet(); render(); }); });
+    };
+    f.appendChild(ren);
+    f.appendChild(el("div","hint","모임을 나눠도 링크를 아는 사람은 모든 모임을 볼 수 있습니다. 가리는 기능이 아니라 나누는 기능이에요."));
+  }
+
   f.appendChild(el("div","sect","나"));
   var who=el("div","pick");
-  MEMBERS.forEach(function(m){
+  members().forEach(function(m){
     var b=el("button"); b.type="button";
     b.setAttribute("aria-pressed",String(me===m.id));
     var sw=el("span","swatch"); sw.style.background=memberVar(m.id);
@@ -1579,24 +1894,56 @@ function sheetSettings(h,body){
   }
 
   if(isAdmin()){
-    f.appendChild(el("div","sect","이름"));
-    var ins=MEMBERS.map(function(m,i){
+    /* 멤버 — 더하고 지우고 이름 고치기. 관리자만. */
+    f.appendChild(el("div","sect","멤버 "+memberCount()+"명"));
+    var draft=members().map(function(m){ return {id:m.id,name:m.name||"",c:(m.c|0)%MC}; });
+    var ins=[];
+    draft.forEach(function(m,i){
       var l=el("label","fld");
-      l.appendChild(el("span",null,"멤버 "+(i+1)));
+      var head=el("div","mhead");
+      var sw=el("span","swatch"); sw.style.background="var(--mc"+m.c+")";
+      head.appendChild(sw);
+      head.appendChild(el("span",null,"멤버 "+(i+1)));
+      var del=el("button",null,"빼기"); del.type="button"; del.className="xbtn";
+      del.onclick=function(){
+        if(draft.length<=1){ toast("최소 한 명은 있어야 해요."); return; }
+        var left=draft.filter(function(x){ return x.id!==m.id; })
+                      .map(function(x,j){ return {id:x.id,name:ins[draft.indexOf(x)].value.trim()||x.name,c:x.c}; });
+        guard(function(){
+          return DATA.saveSettings({members:left}).then(function(){
+            if(me===m.id){ me=null; lsSet(LS_ME,""); }
+            drawSheet(); render(); toast("뺐어요. 남긴 기록은 그대로입니다.");
+          });
+        });
+      };
+      head.appendChild(del);
+      l.appendChild(head);
       var inp=document.createElement("input");
-      inp.id="setnm_"+m.id; inp.value=memberName(m.id); inp.maxLength=8;
+      inp.id="setnm_"+m.id; inp.value=m.name; inp.maxLength=8;
       l.appendChild(inp); f.appendChild(l);
-      return inp;
+      ins.push(inp);
     });
-    var sv=el("button","btn ghost","이름 저장");
+
+    var r2=el("div","row2");
+    var sv=el("button","btn ghost","이름 저장"); sv.type="button";
     sv.onclick=function(){
       guard(function(){
         return DATA.saveSettings({
-          members: MEMBERS.map(function(m,i){ return {id:m.id,name:ins[i].value.trim()||memberName(m.id)}; })
-        }).then(function(){ toast("저장했어요."); });
+          members: draft.map(function(m,i){ return {id:m.id,name:ins[i].value.trim()||m.name||m.id,c:m.c}; })
+        }).then(function(){ drawSheet(); render(); toast("저장했어요."); });
       });
     };
-    f.appendChild(sv);
+    var add=el("button","btn ghost","＋ 멤버"); add.type="button";
+    add.onclick=function(){
+      var next=draft.map(function(m,i){ return {id:m.id,name:ins[i].value.trim()||m.name||m.id,c:m.c}; });
+      next.push({id:nextMemberId(), name:"새 멤버", c:freeColor()});
+      guard(function(){
+        return DATA.saveSettings({members:next}).then(function(){ drawSheet(); render(); });
+      });
+    };
+    r2.appendChild(sv); r2.appendChild(add);
+    f.appendChild(r2);
+    f.appendChild(el("div","hint","멤버를 빼도 그 사람이 남긴 👍·한 줄·참석 기록은 지워지지 않습니다. 목록에서만 빠집니다."));
 
     f.appendChild(el("div","sect","우표 스타일"));
     var stp=el("div","pick");
@@ -1636,7 +1983,7 @@ function sheetSettings(h,body){
 
   f.appendChild(el("div","sect","링크"));
   var share=el("div","hint");
-  share.textContent="이 주소를 셋이 공유하세요: "+location.href.split("#")[0];
+  share.textContent="이 주소를 멤버끼리 공유하세요: "+location.href.split("#")[0];
   f.appendChild(share);
   var cp=el("button","btn ghost sm","링크 복사");
   cp.onclick=function(){
@@ -1658,9 +2005,11 @@ $("#whoBtn").onclick=function(){ openSheet({k:"settings"}); };
 $("#fabBtn").onclick=function(){ openSheet({k:"new"}); };
 
 me=lsGet(LS_ME);
+DATA.gid=lsGet(LS_GID)||"app";   // 데이터를 받아온 뒤 없는 모임이면 첫 모임으로 돌아간다
 render();
 DATA.init(function(){
-  if(sheet) drawSheet();
+  // 글자를 치는 중이면 시트를 건드리지 않는다. 다음 상호작용 때 다시 그려진다.
+  if(sheet && !typingInSheet()) drawSheet();
   render();
 });
 })();

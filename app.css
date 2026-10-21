@@ -11,7 +11,9 @@
   --gold:#8A6A1F;
   --map-land:#8E9CB0;     /* 지도 — 땅 */
   --map-sea:#F2EFE8;      /* 지도 — 바다와 여백 (낡은 종이빛) */
-  --m1:#BE3A2B; --m2:#1F4E79; --m3:#5E7033;
+  /* 멤버 색 — 멤버가 늘어날 수 있어 팔레트로 둔다. settings.members[].c 가 번호. */
+  --mc0:#BE3A2B; --mc1:#1F4E79; --mc2:#5E7033; --mc3:#8A6A1F;
+  --mc4:#7A4A74; --mc5:#2A6B70; --mc6:#C4652A; --mc7:#4A5568;
   --f-disp:"Gowun Batang",ui-serif,Georgia,serif;
   --f-body:"IBM Plex Sans KR",system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
   --f-mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
@@ -22,14 +24,16 @@
   --album:#15191F; --paper:#212832; --ink:#E7EBF0; --ink-soft:#97A1AE; --line:#39424E;
   --post:#E0675A; --postal:#7FB2E0; --gold:#C9A75A;
   --map-land:#46525F; --map-sea:#1A1F27;
-  --m1:#E0675A; --m2:#7FB2E0; --m3:#9DB45F;
+  --mc0:#E0675A; --mc1:#7FB2E0; --mc2:#9DB45F; --mc3:#C9A75A;
+  --mc4:#C094BC; --mc5:#5FA8AE; --mc6:#E09057; --mc7:#9AA6B6;
   color-scheme:dark;
 }}
 :root[data-theme="dark"]{
   --album:#15191F; --paper:#212832; --ink:#E7EBF0; --ink-soft:#97A1AE; --line:#39424E;
   --post:#E0675A; --postal:#7FB2E0; --gold:#C9A75A;
   --map-land:#46525F; --map-sea:#1A1F27;
-  --m1:#E0675A; --m2:#7FB2E0; --m3:#9DB45F;
+  --mc0:#E0675A; --mc1:#7FB2E0; --mc2:#9DB45F; --mc3:#C9A75A;
+  --mc4:#C094BC; --mc5:#5FA8AE; --mc6:#E09057; --mc7:#9AA6B6;
   color-scheme:dark;
 }
 *{box-sizing:border-box}
@@ -215,6 +219,10 @@ div.fld{display:flex;flex-direction:column;gap:6px;font-size:12.5px;color:var(--
   background:none;border-left:0;border-right:0;border-top:0;padding:10px 12px}
 .psrow .nm{font-size:14.5px;color:var(--ink);font-weight:500;overflow-wrap:anywhere}
 .psrow .ad{font-size:11.5px;color:var(--ink-soft);overflow-wrap:anywhere}
+/* 추천 줄 — 왼쪽 상호·분류, 오른쪽 담기 */
+.recorow{flex-direction:row;align-items:center;gap:10px}
+.recorow .l{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}
+.recorow .btn{flex:none;width:auto}
 .warn{font-size:12.5px;color:var(--post)}
 
 .sheet{position:fixed;inset:0;z-index:50;background:var(--album);overflow-y:auto;
@@ -226,6 +234,12 @@ div.fld{display:flex;flex-direction:column;gap:6px;font-size:12.5px;color:var(--
 .sheet .bar h2{font-family:var(--f-disp);font-size:18px;font-weight:700;overflow-wrap:anywhere}
 .sheet .bar button{background:none;border:0;font-size:14px;color:var(--ink-soft);padding:6px 2px;white-space:nowrap}
 .form{display:flex;flex-direction:column;gap:16px;padding:10px 0 4px}
+
+/* 멤버 줄 머리 — 색 동그라미 · 번호 · 빼기 */
+.mhead{display:flex;align-items:center;gap:6px}
+.mhead .swatch{width:10px;height:10px;border-radius:50%;display:inline-block;flex:none}
+.xbtn{margin-left:auto;background:none;border:0;padding:2px 0;font-size:11.5px;color:var(--post);
+  text-decoration:underline;cursor:pointer}
 
 .pick{display:flex;gap:7px;flex-wrap:wrap}
 .pick button{background:var(--paper);border:1px solid var(--line);border-radius:999px;padding:8px 13px;
