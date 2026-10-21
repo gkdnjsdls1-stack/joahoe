@@ -62,6 +62,17 @@ create table if not exists stamps (
 create index if not exists stamps_shop_idx on stamps(shop_id);
 create index if not exists stamps_date_idx on stamps(date);
 
+-- ───────────────────────────────── 1-b. 모임
+-- settings 행 하나가 모임 하나입니다. id 가 모임 키이고, 'app' 이 처음 만든 모임입니다.
+-- 가게와 우표는 gid 로 어느 모임 것인지 가립니다. 기존 데이터는 전부 'app' 으로 들어갑니다.
+-- 친구들은 로그인을 하지 않으므로 모임끼리 서로 가려지지는 않습니다 — 나누기만 합니다.
+alter table settings add column if not exists name       text not null default '좋아회';
+alter table settings add column if not exists created_at timestamptz not null default now();
+alter table shops    add column if not exists gid text not null default 'app';
+alter table stamps   add column if not exists gid text not null default 'app';
+create index if not exists shops_gid_idx  on shops(gid);
+create index if not exists stamps_gid_idx on stamps(gid);
+
 -- 한 줄 메모: 우표 하나에 멤버별 한 줄
 create table if not exists notes (
   stamp_id   uuid not null references stamps(id) on delete cascade,
