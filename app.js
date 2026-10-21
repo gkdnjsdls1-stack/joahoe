@@ -40,6 +40,18 @@ var COLORS = [
 var LS_ME = "joahoe.me";
 var LS_GID = "joahoe.gid";
 var LS_RECO = "joahoe.reco";   // 추천 기준 좌표 {lat,lng,label}
+
+/* 모임은 주소에 담긴다 — .../joahoe/#g=<모임키>
+ * 받은 사람은 자기 모임만 본다. 모임 전환기는 관리자에게만 보인다.
+ * 가리는 게 아니라 안 보여주는 것이다. 기술적으로 막으려면 모임마다
+ * Supabase 프로젝트를 나눠야 한다 (기획서 §1 참고). */
+function hashGid(){
+  var m=String(location.hash||"").match(/[#&]g=([A-Za-z0-9_-]+)/);
+  return m ? m[1] : "";
+}
+function groupLink(){
+  return location.href.split("#")[0] + "#g=" + DATA.gid;
+}
 var AREA_UNSET = "동네 미지정";
 
 var me = null;
@@ -1819,8 +1831,11 @@ function sheetSettings(h,body){
   h.textContent="설정";
   var f=el("div","form");
 
-  /* 모임 — 고르기는 누구나, 만들고 이름 바꾸기는 관리자만.
-     모임끼리 서로 가려지지는 않는다 (친구들은 로그인을 하지 않는다). */
+  /* 모임 — 관리자에게만 보인다.
+     친구들은 자기 모임 링크(#g=…)로 들어오고, 다른 모임이 있는 줄도 모른다.
+     주소를 뜯어보면 볼 수는 있다 — 가리는 게 아니라 안 보여주는 것이다.
+     기술적으로도 막으려면 모임마다 Supabase 프로젝트를 나눠야 한다. */
+  if(isAdmin()){
   f.appendChild(el("div","sect","모임"));
   var gs=el("div","pick");
   (DATA.groups||[]).forEach(function(g){
@@ -1830,6 +1845,7 @@ function sheetSettings(h,body){
     b.onclick=function(){
       if(DATA.gid===g.id) return;
       DATA.setGid(g.id); lsSet(LS_GID,g.id);
+      try{ location.hash="g="+g.id; }catch(e){}   // 주소도 따라가야 링크 복사가 맞는다
       // 모임마다 멤버가 다르다 — 지금 고른 "나" 가 새 모임에 없으면 다시 고르게 한다
       if(!members().some(function(m){ return m.id===me; })){ me=null; lsSet(LS_ME,""); }
       selPin=null; tab="album"; mapWhole=false; kmapSig="";
@@ -1838,7 +1854,7 @@ function sheetSettings(h,body){
     gs.appendChild(b);
   });
   f.appendChild(gs);
-  if(isAdmin()){
+
     var gr=el("div","row2");
     var gname=document.createElement("input");
     gname.placeholder="새 모임 이름"; gname.maxLength=16;
@@ -1849,6 +1865,7 @@ function sheetSettings(h,body){
       guard(function(){
         return DATA.addGroup(nm).then(function(id){
           DATA.setGid(id); lsSet(LS_GID,id);
+          try{ location.hash="g="+id; }catch(e){}
           me=null; lsSet(LS_ME,""); tab="album";
           drawSheet(); render(); toast("모임을 만들었어요. 멤버부터 넣어주세요.");
         });
@@ -1863,7 +1880,7 @@ function sheetSettings(h,body){
       guard(function(){ return DATA.renameGroup(DATA.gid,nm).then(function(){ drawSheet(); render(); }); });
     };
     f.appendChild(ren);
-    f.appendChild(el("div","hint","모임을 나눠도 링크를 아는 사람은 모든 모임을 볼 수 있습니다. 가리는 기능이 아니라 나누는 기능이에요."));
+    f.appendChild(el("div","hint","모임마다 주소가 다릅니다. 받은 사람은 자기 모임만 봅니다 — 다만 주소를 뜯어볼 줄 아는 사람이면 볼 수 있으니, 완전히 막아야 할 내용은 두지 마세요."));
   }
 
   f.appendChild(el("div","sect","나"));
@@ -1983,17 +2000,20 @@ function sheetSettings(h,body){
 
   f.appendChild(el("div","sect","링크"));
   var share=el("div","hint");
-  share.textContent="이 주소를 멤버끼리 공유하세요: "+location.href.split("#")[0];
+  share.textContent="「"+settings().name+"」 멤버에게 이 주소를 주세요: "+groupLink();
   f.appendChild(share);
   var cp=el("button","btn ghost sm","링크 복사");
   cp.onclick=function(){
-    var url=location.href.split("#")[0];
+    var url=groupLink();
     if(navigator.clipboard && navigator.clipboard.writeText){
       navigator.clipboard.writeText(url).then(function(){ toast("링크를 복사했어요."); },
                                              function(){ toast("주소창의 링크를 복사해주세요."); });
     }else toast("주소창의 링크를 복사해주세요.");
   };
   f.appendChild(cp);
+  if(isAdmin() && (DATA.groups||[]).length>1){
+    f.appendChild(el("div","hint","모임마다 주소가 다릅니다. 위에서 모임을 고른 뒤 그 모임 사람들에게 이 링크를 주세요."));
+  }
   body.appendChild(f);
 }
 
@@ -2005,7 +2025,17 @@ $("#whoBtn").onclick=function(){ openSheet({k:"settings"}); };
 $("#fabBtn").onclick=function(){ openSheet({k:"new"}); };
 
 me=lsGet(LS_ME);
-DATA.gid=lsGet(LS_GID)||"app";   // 데이터를 받아온 뒤 없는 모임이면 첫 모임으로 돌아간다
+// 주소에 모임이 담겨 있으면 그게 이긴다. 없으면 지난번에 보던 모임.
+DATA.gid=hashGid()||lsGet(LS_GID)||"app";
+if(hashGid()) lsSet(LS_GID,DATA.gid);
+window.addEventListener("hashchange",function(){
+  var g=hashGid();
+  if(!g || g===DATA.gid) return;
+  DATA.setGid(g); lsSet(LS_GID,g);
+  if(!members().some(function(m){ return m.id===me; })){ me=null; lsSet(LS_ME,""); }
+  selPin=null; tab="album"; mapWhole=false; kmapSig="";
+  drawSheet(); render();
+});
 render();
 DATA.init(function(){
   // 글자를 치는 중이면 시트를 건드리지 않는다. 다음 상호작용 때 다시 그려진다.
