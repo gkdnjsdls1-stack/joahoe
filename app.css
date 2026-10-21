@@ -214,6 +214,8 @@ div.fld{display:flex;flex-direction:column;gap:6px;font-size:12.5px;color:var(--
 .drop{aspect-ratio:3/4;border:1.5px dashed var(--line);border-radius:3px;background:var(--paper);
   display:grid;place-items:center;overflow:hidden;position:relative}
 .drop img{width:100%;height:100%;object-fit:cover}
+/* 발행 화면의 사진 칸은 우표 한 장 크기로. (100% - 격자 간격) / 2 열 */
+.drop.stampsize{width:calc((100% - 18px) / 2);margin-inline:auto}
 .drop .lbl{font-size:14px;color:var(--ink-soft);display:flex;flex-direction:column;gap:4px;align-items:center;
   text-align:center;padding:14px}
 

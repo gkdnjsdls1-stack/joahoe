@@ -7,5 +7,5 @@ window.JOAHOE_CONFIG = {
 
   // 가게 이름으로 주소를 찾는 기능입니다. 비워두면 검색 칸이 안 뜨고,
   // 지금처럼 이름·링크·동네를 직접 적으면 됩니다. (README 「가게 검색」 참고)
-  KAKAO_JS_KEY: ""
+  KAKAO_JS_KEY: "178ecf39ee11c139531a600a776ebc4b"
 };

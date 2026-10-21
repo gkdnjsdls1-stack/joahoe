@@ -120,19 +120,27 @@ function buildPrompt(st){
       "edges, no white margin — the illustration must run all the way to all four edges. No text, no letters, "+
       "no numbers, no signatures anywhere in the image. No people, no faces, no hands.";
   }else{
-    p="Draw a flat vector illustration in portrait orientation, 3:4 — taller than it is wide.\n\n"+
-      "The illustration shows: "+food+".\n\n"+
-      "Style: bold flat vector illustration. Clean shapes with dark confident outlines, two flat tones per "+
-      "element to suggest form — one base color plus one slightly deeper shade. No gradients, no soft shading, "+
-      "no texture, no photographic detail.\n\n"+
-      "Color: the dish keeps its natural appetizing colors. "+col+" is the flat background behind the food. "+
-      "Keep the palette controlled — a handful of flat colors, nothing airbrushed.\n\n"+
-      "Composition: a high three-quarter view looking down at the dish. The food is generous and fills the "+
-      "entire image edge to edge, cropping naturally at the edges rather than floating in the middle. "+
-      "Serving vessels, garnishes and side dishes are welcome.\n\n"+
-      "Important: this is the artwork only, not the stamp itself. No stamp border, no frame, no perforated "+
-      "edges, no white margin — the illustration must run all the way to all four edges. No text, no letters, "+
-      "no numbers anywhere in the image. No people, no faces, no hands.";
+    p="Draw one flat graphic illustration in portrait orientation, 3:4 — taller than it is wide.\n\n"+
+      "The subject is: "+food+".\n\n"+
+      "Reduce the dish to a flattened, symbolic design rather than a realistic illustration. Pull out what "+
+      "makes it recognizable at a glance — the overall silhouette, the main contours, the structural "+
+      "features, the centre axis, the repeating forms, the rim of the bowl, the way the pieces are "+
+      "arranged. Build it from simple geometric shapes, flat blocks of color, thin lines and restrained "+
+      "divisions of surface. Keep enough character that the dish is read instantly, but leave out "+
+      "photographic detail. No shadows, no gloss, no 3D rendering, no cartoon or game-art look.\n\n"+
+      "Background: a light warm ground — beige, ivory or warm white. Generous margins, centered and "+
+      "stable composition. Empty space is part of the design.\n\n"+
+      "Color: four to six colors at most, taken from what the dish actually looks like and desaturated a "+
+      "little. "+col+" is the one accent color, used sparingly. Everything sits comfortably on the light "+
+      "background.\n\n"+
+      "You may add small amounts of: thin horizontal or vertical lines, short line fragments, small dots, "+
+      "a circle or half circle, an abstract frame.\n\n"+
+      "Keep it restrained, modern and high-end — the finish of a gallery poster, an architecture "+
+      "exhibition print, a collector's print. Reference points are Swiss graphic design and museum "+
+      "exhibition graphics.\n\n"+
+      "Important: this is the artwork only, not the stamp itself. No stamp border, no perforated edges, "+
+      "no outer frame around the whole image. No text, no letters, no numbers anywhere in the image. "+
+      "No people, no faces, no hands. No collage, no photograph, one single composition only.";
   }
   if(hasRef) p+="\n\nMatch the style of the attached reference stamps exactly.";
   if(hasPhoto) p+="\n\nUse the attached photo only to understand the dish — do not copy it photographically.";
@@ -220,8 +228,8 @@ function areaFromAddr(addr){
 function naverSearchUrl(name){
   return "https://map.naver.com/p/search/"+encodeURIComponent(name);
 }
-/* onPick({name,url,area}) — 키가 없으면 null 을 돌려준다 */
-function placeSearch(onPick){
+/* onPick({name,url,area,lat,lng}) — 키가 없으면 null 을 돌려준다 */
+function placeSearch(onPick,hintText){
   if(!kakaoKey()) return null;
   var box=el("div","fld");
   box.appendChild(el("span",null,"가게 찾기"));
@@ -232,7 +240,8 @@ function placeSearch(onPick){
   row.appendChild(q); row.appendChild(go);
   box.appendChild(row);
   var list=el("div","psr"); box.appendChild(list);
-  box.appendChild(el("div","hint","고르면 이름·링크·동네가 채워집니다. 링크는 네이버 지도로 걸립니다."));
+  box.appendChild(el("div","hint",
+    hintText||"고르면 이름·링크·동네가 채워집니다. 링크는 네이버 지도로 걸립니다."));
 
   function run(){
     var s=q.value.trim();
@@ -842,7 +851,7 @@ function sheetNew(h,body){
   var f=el("div","form");
   var photoPath=null;
 
-  var drop=el("div","drop");
+  var drop=el("div","drop stampsize");
   var lbl=el("div","lbl");
   lbl.appendChild(el("span",null,"📷 사진 올리기"));
   lbl.appendChild(el("span",null,"음식만 찍으세요"));
@@ -878,6 +887,12 @@ function sheetNew(h,body){
       wishList().slice(0,3).map(function(s){ return s.name; }).join(" · ")));
   }
   f.appendChild(lShop);
+
+  var shopPick=null;
+  var psNew=placeSearch(function(p){
+    shopIn.value=p.name; shopPick=p;
+  },"고르면 가게 이름이 채워지고, 링크·동네·좌표도 함께 저장됩니다.");
+  if(psNew) f.insertBefore(psNew,lShop);
 
   var lFood=el("label","fld");
   lFood.appendChild(el("span",null,"음식"));
@@ -915,12 +930,27 @@ function sheetNew(h,body){
     if(!foodKo){ toast("음식 이름을 적어주세요."); return; }
     guard(function(){
       var existing=shops().filter(function(s){ return s.name===shopName; })[0];
+      // 검색으로 고른 가게일 때만 쓴다. 고른 뒤 이름을 바꿨으면 버린다.
+      var pk=(shopPick && shopPick.name===shopName) ? shopPick : null;
       var p;
       if(existing){
-        p=existing.wish ? DATA.updateShop(existing.id,{wish:false,folded:false}).then(function(){ return existing.id; })
-                        : Promise.resolve(existing.id);
+        var patch={};
+        if(existing.wish){ patch.wish=false; patch.folded=false; }
+        // 이미 채워진 값은 건드리지 않는다. 빈 칸만 메운다.
+        if(pk){
+          if(!existing.url) patch.url=pk.url;
+          if(!existing.area) patch.area=pk.area;
+          if(existing.lat===null||existing.lat===undefined){ patch.lat=pk.lat; patch.lng=pk.lng; }
+        }
+        p=Object.keys(patch).length
+          ? DATA.updateShop(existing.id,patch).then(function(){ return existing.id; })
+          : Promise.resolve(existing.id);
       }else{
-        p=DATA.addShop({name:shopName,wish:false,proposer:me});
+        p=DATA.addShop({
+          name:shopName, wish:false, proposer:me,
+          url:pk?pk.url:"", area:pk?pk.area:"",
+          lat:pk?pk.lat:null, lng:pk?pk.lng:null
+        });
       }
       return p.then(function(shopId){
         return DATA.addStamp({
