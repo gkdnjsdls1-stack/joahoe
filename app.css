@@ -71,38 +71,42 @@ header{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:va
 .banner strong{font-family:var(--f-mono);font-weight:500}
 .banner[aria-pressed="true"]{border-left-width:6px}
 
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:26px 18px}
-.cell{display:flex;flex-direction:column;gap:7px;min-width:0}
+/* 4열 — 우표 한 장이 2열이던 때의 1/4 넓이가 된다 */
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px 9px}
+.cell{display:flex;flex-direction:column;gap:5px;min-width:0}
 .stamp{position:relative;aspect-ratio:3/4;background:var(--paper);border:0;padding:0;display:block;width:100%;
   box-shadow:0 1px 3px rgba(16,24,36,.14)}
-.stamp::before{content:"";position:absolute;left:0;right:0;top:-5px;bottom:-5px;pointer-events:none;z-index:2;
+/* 톱니 테두리와 종이 여백은 사진 우표(임시)에만. 그림 우표는 AI가 우표 전체를 그린다. */
+.stamp.temp::before{content:"";position:absolute;left:0;right:0;top:-5px;bottom:-5px;pointer-events:none;z-index:2;
   background:
     radial-gradient(circle 4.5px at 8px 5px,var(--album) 98%,#0000) top left/16px 10px repeat-x,
     radial-gradient(circle 4.5px at 8px 5px,var(--album) 98%,#0000) bottom left/16px 10px repeat-x}
-.stamp::after{content:"";position:absolute;top:0;bottom:0;left:-5px;right:-5px;pointer-events:none;z-index:2;
+.stamp.temp::after{content:"";position:absolute;top:0;bottom:0;left:-5px;right:-5px;pointer-events:none;z-index:2;
   background:
     radial-gradient(circle 4.5px at 5px 8px,var(--album) 98%,#0000) top left/10px 16px repeat-y,
     radial-gradient(circle 4.5px at 5px 8px,var(--album) 98%,#0000) top right/10px 16px repeat-y}
-.stamp .inner{position:absolute;inset:6px;overflow:hidden;background:var(--album);display:grid;place-items:center}
+.stamp .inner{position:absolute;inset:0;overflow:hidden;background:var(--album);display:grid;place-items:center}
+.stamp.temp .inner{inset:6px}
 .stamp img{width:100%;height:100%;object-fit:cover;display:block}
 .stamp.temp img{filter:grayscale(1) contrast(1.06)}
 .stamp .ph{font-family:var(--f-disp);font-size:13px;color:var(--ink-soft);text-align:center;padding:8px}
-.mark{position:absolute;right:4px;top:4px;z-index:3;font-family:var(--f-mono);font-size:9.5px;letter-spacing:.1em;
-  color:var(--post);border:1.5px solid var(--post);border-radius:50%;width:38px;height:38px;
+.mark{position:absolute;right:2px;top:2px;z-index:3;font-family:var(--f-mono);font-size:7px;letter-spacing:.06em;
+  color:var(--post);border:1px solid var(--post);border-radius:50%;width:24px;height:24px;
   display:grid;place-items:center;transform:rotate(-13deg);opacity:.82;background:var(--paper)}
-.cap{display:flex;flex-direction:column;gap:3px;min-width:0}
-.cap .food{font-family:var(--f-disp);font-size:14.5px;font-weight:700;overflow-wrap:anywhere}
-.cap .shop{font-size:11.5px;color:var(--ink-soft);overflow-wrap:anywhere}
-.cap .row{display:flex;align-items:center;gap:7px}
-.cap .d{font-family:var(--f-mono);font-size:11px;color:var(--ink-soft);font-variant-numeric:tabular-nums}
-.dots{display:flex;gap:3px}
-.dot{width:7px;height:7px;border-radius:50%;border:1.2px solid var(--ink-soft)}
+.cap{display:flex;flex-direction:column;gap:2px;min-width:0}
+.cap .food{font-family:var(--f-disp);font-size:11.5px;font-weight:700;line-height:1.3;overflow-wrap:anywhere}
+.cap .shop{font-size:9.5px;line-height:1.3;color:var(--ink-soft);overflow-wrap:anywhere}
+.cap .row{display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+.cap .d{font-family:var(--f-mono);font-size:9px;color:var(--ink-soft);font-variant-numeric:tabular-nums}
+.dots{display:flex;gap:2px}
+.dot{width:5px;height:5px;border-radius:50%;border:1px solid var(--ink-soft)}
 .dot.on{border-color:transparent}
 
 .slot{aspect-ratio:3/4;width:100%;border:1.5px dashed var(--line);border-radius:3px;background:none;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:var(--ink-soft)}
-.slot .big{font-family:var(--f-disp);font-size:15px}
-.slot .sm{font-size:11px}
+.slot{gap:2px;padding:4px;text-align:center}
+.slot .big{font-family:var(--f-disp);font-size:11px;line-height:1.25}
+.slot .sm{font-size:8.5px;line-height:1.25}
 
 /* ── 가고 싶은 곳 ── */
 .sect{font-family:var(--f-mono);font-size:11.5px;letter-spacing:.12em;color:var(--ink-soft);margin:20px 0 9px}
@@ -214,7 +218,8 @@ div.fld{display:flex;flex-direction:column;gap:6px;font-size:12.5px;color:var(--
 .drop{aspect-ratio:3/4;border:1.5px dashed var(--line);border-radius:3px;background:var(--paper);
   display:grid;place-items:center;overflow:hidden;position:relative}
 .drop img{width:100%;height:100%;object-fit:cover}
-/* 발행 화면의 사진 칸은 우표 한 장 크기로. (100% - 격자 간격) / 2 열 */
+/* 발행 화면의 사진 칸. 우표첩이 4열이 된 뒤에도 이 크기(폭의 절반)를 유지한다 —
+   우표 한 장 크기(79px 남짓)까지 줄이면 누르기 어렵다. */
 .drop.stampsize{width:calc((100% - 18px) / 2);margin-inline:auto}
 .drop .lbl{font-size:14px;color:var(--ink-soft);display:flex;flex-direction:column;gap:4px;align-items:center;
   text-align:center;padding:14px}

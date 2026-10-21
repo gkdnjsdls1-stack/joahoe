@@ -108,39 +108,51 @@ function buildPrompt(st){
   var c=colorOf(st.color), col=c?c.en:"{색}";
   var hasRef=(settings().refStampIds||[]).length>0;
   var hasPhoto=(st.photoPaths||[]).length>0;
+  var yr=(String(st.date||"").match(/^\d{4}/)||[String(new Date().getFullYear())])[0];
+  // 글자는 장식이다. 영문으로만 쓰되 배치는 디자이너에게 맡긴다.
+  var letters=
+    "Lettering is part of the design, printed as crisply as everything else, the way old collectible "+
+    "stamps carry type:\n"+
+    "  - JOAHOE in serif capitals, generously letter-spaced, as the issuing name.\n"+
+    "  - A short title for the dish in serif capitals, two or three words, invented from the dish itself.\n"+
+    "  - Under it a small line in italic script, a few words, like a series name.\n"+
+    "  - A face value reading 1 MEAL, set in a corner the way a denomination is.\n"+
+    "  - The year "+yr+", small, in an opposite corner.\n"+
+    "Arrange these as a period stamp designer would — clear hierarchy, balanced weight, generous "+
+    "letter-spacing, thin printed rules to divide. A faint circular cancellation postmark overlapping one "+
+    "corner is welcome. All lettering in English, correctly spelled.";
   var p;
   if(style==="A"){
-    p="Draw a flat illustration in portrait orientation, 3:4 — taller than it is wide.\n\n"+
-      "The illustration shows: "+food+".\n\n"+
-      "Style: flat illustration with visible linework. Limited palette of exactly three colors — "+col+
-      ", cream, and dark brown. Slightly faded aged paper texture. Simple bold shapes, no gradient shading.\n\n"+
-      "Composition: the subject is generous and fills the entire image edge to edge, cropping naturally at "+
-      "the edges rather than floating in the middle.\n\n"+
-      "Important: this is the artwork only, not the stamp itself. No stamp border, no frame, no perforated "+
-      "edges, no white margin — the illustration must run all the way to all four edges. No text, no letters, "+
-      "no numbers, no signatures anywhere in the image. No people, no faces, no hands.";
+    p="Draw one complete vintage postage stamp, portrait orientation, 3:4 — taller than it is wide. The "+
+      "stamp fills the whole image, its perforated edge running along the image borders; the small gaps "+
+      "between the perforations are plain off-white.\n\n"+
+      "The stamp shows: "+food+".\n\n"+
+      "Style: flat illustration with visible linework on faded aged paper. Limited palette of exactly three "+
+      "inks — "+col+", cream, and dark brown. Simple bold shapes, no gradient shading.\n\n"+
+      "Layout: a cream paper border frames the design, with a thin printed rule just inside it. The dish "+
+      "sits in the middle as a bold silhouette, strong figure against ground. Period stamp devices are "+
+      "welcome where they help: a framed panel, radiating rays, a band of flat color, a decorative "+
+      "corner.\n\n"+
+      letters+"\n\n"+
+      "No people, no faces, no hands.";
   }else{
-    p="Draw one flat graphic illustration in portrait orientation, 3:4 — taller than it is wide.\n\n"+
-      "The subject is: "+food+".\n\n"+
-      "Reduce the dish to a flattened, symbolic design rather than a realistic illustration. Pull out what "+
-      "makes it recognizable at a glance — the overall silhouette, the main contours, the structural "+
-      "features, the centre axis, the repeating forms, the rim of the bowl, the way the pieces are "+
-      "arranged. Build it from simple geometric shapes, flat blocks of color, thin lines and restrained "+
-      "divisions of surface. Keep enough character that the dish is read instantly, but leave out "+
-      "photographic detail. No shadows, no gloss, no 3D rendering, no cartoon or game-art look.\n\n"+
-      "Background: a light warm ground — beige, ivory or warm white. Generous margins, centered and "+
-      "stable composition. Empty space is part of the design.\n\n"+
-      "Color: four to six colors at most, taken from what the dish actually looks like and desaturated a "+
-      "little. "+col+" is the one accent color, used sparingly. Everything sits comfortably on the light "+
-      "background.\n\n"+
-      "You may add small amounts of: thin horizontal or vertical lines, short line fragments, small dots, "+
-      "a circle or half circle, an abstract frame.\n\n"+
-      "Keep it restrained, modern and high-end — the finish of a gallery poster, an architecture "+
-      "exhibition print, a collector's print. Reference points are Swiss graphic design and museum "+
-      "exhibition graphics.\n\n"+
-      "Important: this is the artwork only, not the stamp itself. No stamp border, no perforated edges, "+
-      "no outer frame around the whole image. No text, no letters, no numbers anywhere in the image. "+
-      "No people, no faces, no hands. No collage, no photograph, one single composition only.";
+    p="Draw one complete vintage postage stamp, portrait orientation, 3:4 — taller than it is wide. The "+
+      "stamp fills the whole image, its perforated edge running along the image borders; the small gaps "+
+      "between the perforations are plain off-white.\n\n"+
+      "The stamp shows: "+food+".\n\n"+
+      "Style: flat shapes printed on aged paper. A limited set of inks, screen-printed or risograph look — "+
+      "visible paper grain, fine speckle and slightly mottled ink, as if printed decades ago and faded "+
+      "since. The edges of colored areas are a little imperfect, as printed ink is. No gradients, no "+
+      "shading, no gloss, no 3D rendering. Not photorealistic.\n\n"+
+      "Color: muted, faded inks — nothing bright or saturated. A cream paper border frames the design. "+
+      col+", dulled and deepened, is the flat background behind the food. The dish uses softened versions "+
+      "of its real colors. Six ink colors at most.\n\n"+
+      "Layout: a cream paper border, a thin printed rule just inside it, and the dish held within that "+
+      "frame — a high three-quarter view, simplified to a bold silhouette with strong figure and ground. "+
+      "Period stamp devices are welcome where they help: a framed panel, radiating rays behind the "+
+      "subject, a band of flat color, a small decorative corner.\n\n"+
+      letters+"\n\n"+
+      "No people, no faces, no hands.";
   }
   if(hasRef) p+="\n\nMatch the style of the attached reference stamps exactly.";
   if(hasPhoto) p+="\n\nUse the attached photo only to understand the dish — do not copy it photographically.";
