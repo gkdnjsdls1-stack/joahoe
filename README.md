@@ -12,6 +12,8 @@ data.js                        데이터 계층 — Supabase는 이 파일에만
 config.js                      ← 여기 두 줄만 채우면 됩니다
 manifest.webmanifest           홈 화면에 추가용
 icon.svg                       앱 아이콘
+apple-touch-icon.png           아이폰 홈 화면 아이콘 (180×180)
+og.png                         단톡방 링크 미리보기 카드 (1200×630)
 serve.ps1                      로컬 미리보기 서버 (윈도우, 설치 불필요)
 .nojekyll                      깃허브 페이지가 파일을 건드리지 않게
 supabase/schema.sql            테이블 · 권한 · 저장소 (한 번 실행)
@@ -159,6 +161,10 @@ powershell -ExecutionPolicy Bypass -File serve.ps1
 
 ## 남은 것
 
-- **아이폰 홈 화면 아이콘** — 지금은 SVG만 있습니다. 안드로이드는 제대로 나오고, 아이폰에서 또렷하게 하려면 `icon.svg` 를 180×180 PNG로 내보내 `apple-touch-icon.png` 로 넣고 `index.html` 의 `apple-touch-icon` 경로를 바꾸면 됩니다
-- **단톡방 링크 미리보기** — `index.html` 의 `og:image` 가 `og.png` 를 가리킵니다. 1200×630 이미지를 그 이름으로 넣으면 링크에 카드가 뜹니다
 - **우표 스타일 A/B** — 아직 미정. 설정에서 바꿀 수 있고, 초반 몇 장 뽑아보고 정하면 됩니다
+
+아이콘과 링크 미리보기는 넣었습니다 (`apple-touch-icon.png` · `og.png`).
+
+`og:image` 는 **절대 주소**여야 단톡방이 읽습니다. 지금은
+`https://gkdnjsdls1-stack.github.io/joahoe/og.png` 로 적혀 있으니, 주소가 달라지면
+`index.html` 의 `og:image` 도 함께 고쳐야 합니다.
