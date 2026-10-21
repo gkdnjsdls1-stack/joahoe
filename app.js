@@ -110,22 +110,29 @@ function buildPrompt(st){
   var hasPhoto=(st.photoPaths||[]).length>0;
   var p;
   if(style==="A"){
-    p="Draw a single vintage postage stamp, square format, centered on a plain cream background.\n\n"+
-      "The stamp shows: "+food+".\n\n"+
+    p="Draw a flat illustration in portrait orientation, 3:4 — taller than it is wide.\n\n"+
+      "The illustration shows: "+food+".\n\n"+
       "Style: flat illustration with visible linework. Limited palette of exactly three colors — "+col+
       ", cream, and dark brown. Slightly faded aged paper texture. Simple bold shapes, no gradient shading.\n\n"+
-      "Composition: the subject fills about 70% of the stamp. A thick cream border frames it, with classic "+
-      "perforated edges on all four sides.\n\n"+
-      "Important: no text, no letters, no numbers, no signatures anywhere in the image. "+
-      "No people, no faces, no hands.";
+      "Composition: the subject is generous and fills the entire image edge to edge, cropping naturally at "+
+      "the edges rather than floating in the middle.\n\n"+
+      "Important: this is the artwork only, not the stamp itself. No stamp border, no frame, no perforated "+
+      "edges, no white margin — the illustration must run all the way to all four edges. No text, no letters, "+
+      "no numbers, no signatures anywhere in the image. No people, no faces, no hands.";
   }else{
-    p="Draw a single modern postage stamp, square format, centered on a plain off-white background.\n\n"+
-      "The stamp shows: "+food+".\n\n"+
-      "Style: bold flat vector illustration. Clean geometric shapes, thick confident outlines, no gradients, "+
-      "no texture. Four flat colors only — "+col+" as the main color, plus warm beige, charcoal, and white.\n\n"+
-      "Composition: the subject is simplified to its most recognizable silhouette and fills about 65% of the "+
-      "stamp. Generous margin, perforated edges on all four sides.\n\n"+
-      "Important: no text, no letters, no numbers anywhere in the image. No people, no faces.";
+    p="Draw a flat vector illustration in portrait orientation, 3:4 — taller than it is wide.\n\n"+
+      "The illustration shows: "+food+".\n\n"+
+      "Style: bold flat vector illustration. Clean shapes with dark confident outlines, two flat tones per "+
+      "element to suggest form — one base color plus one slightly deeper shade. No gradients, no soft shading, "+
+      "no texture, no photographic detail.\n\n"+
+      "Color: the dish keeps its natural appetizing colors. "+col+" is the flat background behind the food. "+
+      "Keep the palette controlled — a handful of flat colors, nothing airbrushed.\n\n"+
+      "Composition: a high three-quarter view looking down at the dish. The food is generous and fills the "+
+      "entire image edge to edge, cropping naturally at the edges rather than floating in the middle. "+
+      "Serving vessels, garnishes and side dishes are welcome.\n\n"+
+      "Important: this is the artwork only, not the stamp itself. No stamp border, no frame, no perforated "+
+      "edges, no white margin — the illustration must run all the way to all four edges. No text, no letters, "+
+      "no numbers anywhere in the image. No people, no faces, no hands.";
   }
   if(hasRef) p+="\n\nMatch the style of the attached reference stamps exactly.";
   if(hasPhoto) p+="\n\nUse the attached photo only to understand the dish — do not copy it photographically.";
@@ -164,6 +171,99 @@ function uploadImage(file,kind){
     else toast("사진을 올리지 못했어요.");
     return null;
   });
+}
+
+/* ── 장소 검색 (카카오) ─────────────────────────────────────
+ * 카카오 JavaScript 키는 브라우저에 드러나는 것을 전제로 만든 키라 config.js 에 둔다.
+ * 보호는 카카오 개발자 콘솔의 도메인 등록이 한다 (README 참고).
+ * 키가 없으면 검색 칸이 아예 안 뜨고, 지금처럼 직접 입력하면 된다.
+ */
+var KAKAO={state:"none",p:null};
+function kakaoKey(){ return (window.JOAHOE_CONFIG||{}).KAKAO_JS_KEY||""; }
+function loadKakao(){
+  if(KAKAO.p) return KAKAO.p;
+  var key=kakaoKey();
+  if(!key){ KAKAO.state="nokey"; KAKAO.p=Promise.resolve(false); return KAKAO.p; }
+  KAKAO.state="loading";
+  KAKAO.p=new Promise(function(res){
+    var s=document.createElement("script");
+    s.src="https://dapi.kakao.com/v2/maps/sdk.js?appkey="+encodeURIComponent(key)+
+          "&libraries=services&autoload=false";
+    s.onload=function(){
+      try{ window.kakao.maps.load(function(){ KAKAO.state="ready"; res(true); }); }
+      catch(e){ KAKAO.state="fail"; res(false); }
+    };
+    s.onerror=function(){ KAKAO.state="fail"; res(false); };
+    document.head.appendChild(s);
+  });
+  return KAKAO.p;
+}
+function searchPlaces(q){
+  return loadKakao().then(function(ok){
+    if(!ok) return null;
+    return new Promise(function(res){
+      try{
+        var ps=new window.kakao.maps.services.Places();
+        ps.keywordSearch(q,function(data,status){
+          res(status===window.kakao.maps.services.Status.OK ? data.slice(0,8) : []);
+        });
+      }catch(e){ res(null); }
+    });
+  });
+}
+/* "서울 성동구 성수동2가 …" → "성수" */
+function areaFromAddr(addr){
+  var p=String(addr||"").trim().split(/\s+/);
+  var d=(p[2]||"").replace(/\d+가$/,"").replace(/\d+동$/,"").replace(/동$/,"").replace(/가$/,"");
+  return d || p[1] || "";
+}
+function naverSearchUrl(name){
+  return "https://map.naver.com/p/search/"+encodeURIComponent(name);
+}
+/* onPick({name,url,area}) — 키가 없으면 null 을 돌려준다 */
+function placeSearch(onPick){
+  if(!kakaoKey()) return null;
+  var box=el("div","fld");
+  box.appendChild(el("span",null,"가게 찾기"));
+  var row=el("div","row2");
+  var q=document.createElement("input");
+  q.type="search"; q.placeholder="상호로 검색 — 예: 을지면옥";
+  var go=el("button","btn ghost sm","찾기"); go.type="button"; go.style.flex="0 0 74px";
+  row.appendChild(q); row.appendChild(go);
+  box.appendChild(row);
+  var list=el("div","psr"); box.appendChild(list);
+  box.appendChild(el("div","hint","고르면 이름·링크·동네가 채워집니다. 링크는 네이버 지도로 걸립니다."));
+
+  function run(){
+    var s=q.value.trim();
+    if(!s) return;
+    list.innerHTML=""; list.appendChild(el("div","hint","찾는 중…"));
+    searchPlaces(s).then(function(rs){
+      list.innerHTML="";
+      if(rs===null){ list.appendChild(el("div","hint","검색을 불러오지 못했어요. 직접 적어주세요.")); return; }
+      if(!rs.length){ list.appendChild(el("div","hint","결과가 없어요. 이름을 줄여서 다시 찾아보세요.")); return; }
+      rs.forEach(function(r){
+        var b=el("button","psrow"); b.type="button";
+        b.appendChild(el("span","nm",r.place_name));
+        b.appendChild(el("span","ad",r.road_address_name||r.address_name||""));
+        b.onclick=function(){
+          onPick({
+            name:r.place_name,
+            url:naverSearchUrl(r.place_name),
+            area:areaFromAddr(r.address_name||r.road_address_name),
+            lat:Number(r.y),   // 카카오는 y 가 위도, x 가 경도
+            lng:Number(r.x)
+          });
+          list.innerHTML="";
+          toast("채웠어요. 틀리면 고치면 됩니다.");
+        };
+        list.appendChild(b);
+      });
+    });
+  }
+  go.onclick=run;
+  q.onkeydown=function(e){ if(e.key==="Enter"){ e.preventDefault(); run(); } };
+  return box;
 }
 
 /* ── 데이터 뷰 ──────────────────────────────────────────── */
@@ -1103,6 +1203,13 @@ function sheetWish(h,body){
   l4.appendChild(el("div","hint","지도 탭에서 동네별로 묶입니다."));
   f.appendChild(l4);
 
+  var pick=null;
+  var ps=placeSearch(function(p){
+    n.value=p.name; u.value=p.url; if(p.area) ar.value=p.area;
+    pick=p;
+  });
+  if(ps) f.insertBefore(ps,l1);
+
   var b=el("button","btn","추가하기");
   b.onclick=function(){
     var name=n.value.trim();
@@ -1112,7 +1219,10 @@ function sheetWish(h,body){
     if(raw && !safe){ toast("링크 주소를 확인해주세요."); return; }
     guard(function(){
       return DATA.addShop({
-        name:name, wish:true, proposer:me, reason:r.value.trim(), url:safe, area:ar.value.trim()
+        name:name, wish:true, proposer:me, reason:r.value.trim(), url:safe, area:ar.value.trim(),
+        // 검색으로 고른 가게면 좌표도 같이 담아둔다 (이름을 직접 고쳤으면 버린다)
+        lat:(pick && pick.name===name) ? pick.lat : null,
+        lng:(pick && pick.name===name) ? pick.lng : null
       }).then(function(id){
         return id ? DATA.setLike(id,me,true) : null;
       }).then(function(){
@@ -1204,14 +1314,24 @@ function sheetShop(h,body){
   l3.appendChild(el("div","hint","지도 탭에서 동네별로 묶입니다."));
   f.appendChild(l3);
 
+  var pick=null;
+  var ps=placeSearch(function(p){
+    nIn.value=p.name; uIn.value=p.url; if(p.area) aIn.value=p.area;
+    pick=p;
+  });
+  if(ps) f.insertBefore(ps,l1);
+
   var sv=el("button","btn","저장");
   sv.onclick=function(){
     var nm=nIn.value.trim();
     if(!nm){ toast("가게 이름을 적어주세요."); return; }
     var raw=uIn.value.trim(), safe=safeUrl(raw);
     if(raw && !safe){ toast("링크 주소를 확인해주세요."); return; }
+    var patch={name:nm,url:safe,area:aIn.value.trim()};
+    // 검색으로 고른 가게일 때만 좌표를 건드린다. 손으로 고친 경우 기존 좌표를 지우지 않는다.
+    if(pick && pick.name===nm){ patch.lat=pick.lat; patch.lng=pick.lng; }
     guard(function(){
-      return DATA.updateShop(s.id,{name:nm,url:safe,area:aIn.value.trim()}).then(function(){
+      return DATA.updateShop(s.id,patch).then(function(){
         if(nm===s.name) return null;
         return Promise.all(stamps().filter(function(x){ return x.shopId===s.id; })
           .map(function(st){ return DATA.updateStamp(st.id,{shopName:nm}); }));

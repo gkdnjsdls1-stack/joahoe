@@ -73,7 +73,7 @@ header{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:va
 
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:26px 18px}
 .cell{display:flex;flex-direction:column;gap:7px;min-width:0}
-.stamp{position:relative;aspect-ratio:1;background:var(--paper);border:0;padding:0;display:block;width:100%;
+.stamp{position:relative;aspect-ratio:3/4;background:var(--paper);border:0;padding:0;display:block;width:100%;
   box-shadow:0 1px 3px rgba(16,24,36,.14)}
 .stamp::before{content:"";position:absolute;left:0;right:0;top:-5px;bottom:-5px;pointer-events:none;z-index:2;
   background:
@@ -99,7 +99,7 @@ header{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:va
 .dot{width:7px;height:7px;border-radius:50%;border:1.2px solid var(--ink-soft)}
 .dot.on{border-color:transparent}
 
-.slot{aspect-ratio:1;width:100%;border:1.5px dashed var(--line);border-radius:3px;background:none;
+.slot{aspect-ratio:3/4;width:100%;border:1.5px dashed var(--line);border-radius:3px;background:none;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:var(--ink-soft)}
 .slot .big{font-family:var(--f-disp);font-size:15px}
 .slot .sm{font-size:11px}
@@ -179,6 +179,17 @@ div.fld{display:flex;flex-direction:column;gap:6px;font-size:12.5px;color:var(--
   padding:11px 12px;font-size:15px;width:100%}
 .fld textarea{resize:vertical;min-height:72px}
 .hint{font-size:12px;color:var(--ink-soft)}
+
+/* 장소 검색 결과 */
+.psr:empty{display:none}
+.psr{border:1px solid var(--line);border-radius:3px;background:var(--paper);overflow:hidden}
+.psr>*{border-bottom:1px solid var(--line)}
+.psr>*:last-child{border-bottom:0}
+.psr .hint{padding:10px 12px}
+.psrow{display:flex;flex-direction:column;gap:2px;align-items:flex-start;text-align:left;width:100%;
+  background:none;border-left:0;border-right:0;border-top:0;padding:10px 12px}
+.psrow .nm{font-size:14.5px;color:var(--ink);font-weight:500;overflow-wrap:anywhere}
+.psrow .ad{font-size:11.5px;color:var(--ink-soft);overflow-wrap:anywhere}
 .warn{font-size:12.5px;color:var(--post)}
 
 .sheet{position:fixed;inset:0;z-index:50;background:var(--album);overflow-y:auto;
@@ -200,7 +211,7 @@ div.fld{display:flex;flex-direction:column;gap:6px;font-size:12.5px;color:var(--
 .chip{width:34px;height:34px;border-radius:50%;border:2px solid var(--line);padding:0}
 .chip[aria-pressed="true"]{border-color:var(--ink);box-shadow:0 0 0 2px var(--album),0 0 0 3.5px var(--ink)}
 
-.drop{aspect-ratio:4/3;border:1.5px dashed var(--line);border-radius:3px;background:var(--paper);
+.drop{aspect-ratio:3/4;border:1.5px dashed var(--line);border-radius:3px;background:var(--paper);
   display:grid;place-items:center;overflow:hidden;position:relative}
 .drop img{width:100%;height:100%;object-fit:cover}
 .drop .lbl{font-size:14px;color:var(--ink-soft);display:flex;flex-direction:column;gap:4px;align-items:center;
@@ -228,7 +239,7 @@ div.fld{display:flex;flex-direction:column;gap:6px;font-size:12.5px;color:var(--
 .refrow a{width:56px;height:56px;border:1px solid var(--line);background:var(--paper);overflow:hidden;display:block}
 .refrow img{width:100%;height:100%;object-fit:cover}
 .thumbs{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}
-.thumbs button{aspect-ratio:1;border:1px solid var(--line);background:var(--album);padding:0;overflow:hidden}
+.thumbs button{aspect-ratio:3/4;border:1px solid var(--line);background:var(--album);padding:0;overflow:hidden}
 .thumbs img{width:100%;height:100%;object-fit:cover;display:block}
 .thumbs img.t{filter:grayscale(1)}
 

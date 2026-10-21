@@ -37,10 +37,17 @@ function normSettings(r){
     areaPos: r.area_pos || {}
   };
 }
+/* 좌표: 값이 없으면 null, 있으면 숫자 */
+function num(v){
+  if(v === null || v === undefined || v === "") return null;
+  var n = Number(v);
+  return isFinite(n) ? n : null;
+}
 function normShop(r){
   return {
     id: r.id, name: r.name || "", wish: !!r.wish, proposer: r.proposer || "",
     folded: !!r.folded, reason: r.reason || "", url: r.url || "", area: r.area || "",
+    lat: num(r.lat), lng: num(r.lng),
     createdAt: r.created_at, visitedAt: r.visited_at
   };
 }
@@ -160,11 +167,15 @@ DATA.saveSettings = function(patch){
 };
 
 DATA.addShop = function(s){
-  return sb.from("shops").insert({
+  var row = {
     name: s.name, wish: s.wish !== false, proposer: s.proposer || "",
     folded: false, reason: s.reason || "", url: s.url || "", area: s.area || "",
     visited_at: s.wish === false ? new Date().toISOString() : null
-  }).select().then(function(r){
+  };
+  // 좌표는 있을 때만 싣는다. 스키마를 아직 안 돌렸어도 추가가 막히지 않게.
+  var la = num(s.lat), ln = num(s.lng);
+  if(la !== null && ln !== null){ row.lat = la; row.lng = ln; }
+  return sb.from("shops").insert(row).select().then(function(r){
     if(r.error) throw r.error;
     return reload().then(function(){ return (r.data && r.data[0]) ? r.data[0].id : null; });
   });
@@ -174,6 +185,8 @@ DATA.updateShop = function(id, patch){
   if("name" in patch) o.name = patch.name;
   if("url" in patch) o.url = patch.url;
   if("area" in patch) o.area = patch.area;
+  if("lat" in patch) o.lat = num(patch.lat);
+  if("lng" in patch) o.lng = num(patch.lng);
   if("folded" in patch) o.folded = patch.folded;
   if("wish" in patch){ o.wish = patch.wish; if(patch.wish === false) o.visited_at = new Date().toISOString(); }
   return sb.from("shops").update(o).eq("id", id).then(function(r){
