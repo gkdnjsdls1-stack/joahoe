@@ -244,6 +244,7 @@ function nothingTouched(){
 DATA.updateShop = function(id, patch){
   var o = {};
   if("name" in patch) o.name = patch.name;
+  if("reason" in patch) o.reason = patch.reason;
   if("url" in patch) o.url = patch.url;
   if("area" in patch) o.area = patch.area;
   if("lat" in patch) o.lat = num(patch.lat);

@@ -1594,6 +1594,7 @@ function sheetShop(h,body){
   /* 가고 싶은 곳은 셋 다 고치고 지울 수 있다 (RLS 도 wish = true 인 줄만 열어둔다).
      다녀온 가게는 우표가 걸려 있어서 관리자만 손댄다. */
   var canEdit = isAdmin() || s.wish;
+  var reasonIn = null;
 
   /* 메뉴 줄은 가게가 아니다 — 고칠 게 이름뿐이고, 링크·동네 칸은 보여주지 않는다. */
   if(isMenu(s)){
@@ -1606,12 +1607,14 @@ function sheetShop(h,body){
     var ml=el("label","fld"); ml.appendChild(el("span",null,"이름"));
     var mIn=document.createElement("input"); mIn.id="mnn"; mIn.value=s.name||"";
     ml.appendChild(mIn); f.appendChild(ml);
+    f.appendChild(reasonField());
     var msv=el("button","btn","저장");
     msv.onclick=function(){
       var nm=mIn.value.trim();
       if(!nm){ toast("메뉴 이름을 적어주세요."); return; }
       guard(function(){
-        return DATA.updateShop(s.id,{name:nm}).then(function(){ toast("저장했어요."); closeSheet(); });
+        return DATA.updateShop(s.id,{name:nm, reason:reasonIn.value.trim()})
+          .then(function(){ toast("저장했어요."); closeSheet(); });
       });
     };
     f.appendChild(msv);
@@ -1634,6 +1637,8 @@ function sheetShop(h,body){
   var l1=el("label","fld"); l1.appendChild(el("span",null,"이름"));
   var nIn=document.createElement("input"); nIn.id="shn"; nIn.value=s.name||"";
   l1.appendChild(nIn); f.appendChild(l1);
+
+  if(s.wish) f.appendChild(reasonField());
 
   var l2=el("label","fld"); l2.appendChild(el("span",null,"링크"));
   var uIn=document.createElement("input"); uIn.id="shu"; uIn.type="url"; uIn.inputMode="url";
@@ -1663,6 +1668,7 @@ function sheetShop(h,body){
     var raw=uIn.value.trim(), safe=safeUrl(raw);
     if(raw && !safe){ toast("링크 주소를 확인해주세요."); return; }
     var patch={name:nm,url:safe,area:aIn.value.trim()};
+    if(s.wish) patch.reason=reasonIn.value.trim();
     // 검색으로 고른 가게일 때만 좌표를 건드린다. 손으로 고친 경우 기존 좌표를 지우지 않는다.
     if(pick && pick.name===nm){ patch.lat=pick.lat; patch.lng=pick.lng; }
     guard(function(){
@@ -1678,6 +1684,17 @@ function sheetShop(h,body){
   if(s.wish){ f.appendChild(foldBtn()); f.appendChild(delBtn()); }
   body.appendChild(f);
 
+  /* 한 줄 이유 — 가고 싶은 곳 카드에 「누구: 이유」로 뜨는 그 줄.
+     쓴 사람이 아니어도 고칠 수 있다. 셋이 같이 쓰는 목록이라 그렇다. */
+  function reasonField(){
+    var l=el("label","fld"); l.appendChild(el("span",null,"한 줄 이유 (선택)"));
+    reasonIn=document.createElement("input");
+    reasonIn.id="shr"; reasonIn.value=s.reason||"";
+    reasonIn.placeholder="사진 보고 뿅 감"; reasonIn.maxLength=40;
+    l.appendChild(reasonIn);
+    l.appendChild(el("div","hint","비워두면 「"+(memberName(s.proposer)||"누군가")+" 추천」 으로만 보입니다."));
+    return l;
+  }
   function foldBtn(){
     var fold=el("button","btn ghost", s.folded?"다시 펼치기":"접어두기");
     fold.onclick=function(){
