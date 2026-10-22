@@ -44,6 +44,11 @@ create table if not exists shops (
 alter table shops add column if not exists lat double precision;
 alter table shops add column if not exists lng double precision;
 
+-- 'shop' 은 가게, 'menu' 는 메뉴 추천에서 담은 줄입니다 ("마라탕" 처럼 이름만 있고
+-- 링크도 동네도 없어서 지도에 찍지 않습니다). 칸이 없어도 앱은 돌아갑니다 —
+-- 그때는 메뉴가 그냥 가게 한 줄로 들어갑니다.
+alter table shops add column if not exists kind text not null default 'shop';
+
 create table if not exists stamps (
   id          uuid primary key default gen_random_uuid(),
   shop_id     uuid references shops(id) on delete set null,
@@ -127,9 +132,16 @@ create policy "admin notes" on notes for all
 create policy "admin likes" on likes for all
   using (auth.uid() is not null) with check (auth.uid() is not null);
 
--- 친구 둘: 가고 싶은 곳 "추가"만. 수정·삭제는 불가.
-drop policy if exists "guest adds wish" on shops;
-create policy "guest adds wish" on shops for insert with check (wish = true);
+-- 친구 둘: 가고 싶은 곳은 추가·수정·삭제 모두 됩니다.
+-- 닿는 범위는 wish = true 인 줄뿐입니다 — 다녀온 가게(우표가 붙은 줄)는 손이 닿지 않고,
+-- with check 가 있어서 가고 싶은 곳을 "다녀온 곳"으로 바꿔치기할 수도 없습니다.
+-- 지우면 그 줄의 👍 도 함께 사라집니다 (likes 가 on delete cascade).
+drop policy if exists "guest adds wish"    on shops;
+drop policy if exists "guest edits wish"   on shops;
+drop policy if exists "guest deletes wish" on shops;
+create policy "guest adds wish"    on shops for insert with check (wish = true);
+create policy "guest edits wish"   on shops for update using (wish = true) with check (wish = true);
+create policy "guest deletes wish" on shops for delete using (wish = true);
 
 -- 친구 둘: 👍 넣고 빼기
 drop policy if exists "guest likes"   on likes;

@@ -39,7 +39,6 @@ var COLORS = [
 ];
 var LS_ME = "joahoe.me";
 var LS_GID = "joahoe.gid";
-var LS_RECO = "joahoe.reco";   // 추천 기준 좌표 {lat,lng,label}
 
 /* 모임은 주소에 담긴다 — .../joahoe/#g=<모임키>
  * 받은 사람은 자기 모임만 본다. 모임 전환기는 관리자에게만 보인다.
@@ -323,64 +322,97 @@ function placeSearch(onPick,hintText){
   return box;
 }
 
-/* ── 추천 — 위시에 넣을 거리를 찾는다 ─────────────────────
- * 카카오는 평점이나 인기 순위를 주지 않는다. 그래서 이건 "맛집을 골라주는" 기능이
- * 아니라 "이 동네에 이런 집들이 있다"를 펼쳐주는 기능이다. 고르는 건 사람 몫.
+/* ── 메뉴 추천 — "뭐 먹지"에서 멈춘 걸 풀어준다 ───────────
+ * 가게를 골라주지 않는다. 가게는 메뉴를 정한 다음 사람이 고른다.
+ * 그래서 바깥 API를 쓰지 않는다 — 목록은 아래에 그냥 적혀 있고,
+ * 우표에 적은 음식 이름과 맞춰 "언제 먹었는지"만 붙인다.
+ * 한 글자 이름은 엉뚱한 데 걸리니(회 → 회덮밥) 목록에 두지 않는다.
  */
-var RECO_CATS=[
-  {ko:"아무거나", kw:null},
-  {ko:"고기",     kw:"고깃집"},
-  {ko:"튀김·전",  kw:"전집"},
-  {ko:"면",       kw:"국수"},
-  {ko:"해산물",   kw:"회"},
-  {ko:"찌개",     kw:"찌개"},
-  {ko:"디저트",   kw:"디저트"}
+var MENUS=[
+  {ko:"아무거나", items:null},
+  {ko:"고기", items:["삼겹살","목살","돼지갈비","갈매기살","항정살","소갈비","등심구이","차돌박이",
+                     "양꼬치","닭갈비","찜닭","닭볶음탕","닭한마리","치킨","닭강정","족발","보쌈",
+                     "수육","곱창","막창","오리고기","제육볶음","불고기","닭발"]},
+  {ko:"국물", items:["김치찌개","된장찌개","부대찌개","순두부","감자탕","갈비탕","설렁탕","삼계탕",
+                     "육개장","해장국","순댓국","콩나물국밥","추어탕","매운탕","알탕","동태탕",
+                     "곰탕","미역국","김치찜","어묵탕","떡국","수제비","만둣국"]},
+  {ko:"면",   items:["칼국수","막국수","물냉면","비빔냉면","밀면","잔치국수","비빔국수","콩국수",
+                     "쫄면","짜장면","간짜장","짬뽕","라멘","우동","소바","파스타","쌀국수","마라탕"]},
+  {ko:"밥",   items:["비빔밥","돌솥비빔밥","백반","한정식","국밥","볶음밥","오므라이스","김밥",
+                     "초밥","회덮밥","연어덮밥","제육덮밥","오징어덮밥","낙지덮밥","알밥",
+                     "카레라이스","리조또","쌈밥","곤드레밥","전복죽"]},
+  {ko:"해산물", items:["모둠회","물회","산낙지","조개구이","대게","꽃게찜","간장게장","장어구이",
+                       "아귀찜","해물찜","전복요리","굴요리","낙지볶음","쭈꾸미볶음","오징어볶음",
+                       "골뱅이무침","생선구이","갈치조림","새우구이","해물탕"]},
+  {ko:"분식·전", items:["떡볶이","라볶이","순대","모둠튀김","어묵","떡꼬치","라면","만두","호떡",
+                        "핫도그","토스트","파전","김치전","감자전","녹두전","모둠전","부추전"]},
+  // 야식은 새 음식이라기보다 "늦은 밤에 시키는 것들"이다 — 다른 계열과 일부러 겹친다
+  {ko:"야식", items:["치킨","닭강정","닭발","닭똥집","닭꼬치","족발","보쌈","곱창","막창","양꼬치",
+                     "떡볶이","라볶이","라면","순대","모둠튀김","감자튀김","두부김치","계란말이",
+                     "만두","피자","마라탕","어묵탕","골뱅이무침"]},
+  {ko:"중식", items:["탕수육","크림새우","깐풍기","유린기","라조기","팔보채","유산슬","동파육",
+                     "양장피","멘보샤","꿔바로우","고추잡채","마파두부","딤섬","마라샹궈","훠궈"]},
+  {ko:"일식", items:["초밥","오마카세","사시미","돈카츠","규카츠","가츠동","규동","텐동",
+                     "장어덮밥","오코노미야키","야키소바","타코야키","야키토리","스키야키","샤브샤브"]},
+  {ko:"양식", items:["피자","스테이크","폭립","수제버거","브런치","샐러드","샌드위치","감바스",
+                     "라자냐","파에야","그라탕","피시앤칩스","나초","타코","부리토","스튜"]},
+  {ko:"아시아", items:["팟타이","푸팟퐁커리","분짜","짜조","반쎄오","똠얌꿍","반미","나시고렝",
+                       "사테","커리","탄두리치킨","케밥","양고기구이","월남쌈"]},
+  {ko:"디저트", items:["빙수","케이크","티라미수","와플","크레페","크로플","도넛","아이스크림",
+                       "붕어빵","탕후루","타르트","에그타르트","마카롱","쿠키","스콘","슈크림",
+                       "찹쌀떡","약과","푸딩","밀크티"]}
 ];
-/* 기준 좌표 — 가게들의 평균. 없으면 기기에 저장해 둔 것. */
-function recoCenter(){
-  var pts=shops().filter(hasPos);
-  if(pts.length){
-    var la=0, ln=0;
-    pts.forEach(function(s){ la+=s.lat; ln+=s.lng; });
-    return {lat:la/pts.length, lng:ln/pts.length, label:"우리 가게들"};
-  }
-  try{
-    var o=JSON.parse(lsGet(LS_RECO)||"null");
-    if(o && typeof o.lat==="number") return o;
-  }catch(e){}
-  return null;
-}
-function recoSearch(kw,center){
-  return loadKakao().then(function(ok){
-    if(!ok) return null;
-    return new Promise(function(res){
-      try{
-        var K=window.kakao.maps, ps=new K.services.Places();
-        var opt={ location:new K.LatLng(center.lat,center.lng), radius:5000,
-                  sort:K.services.SortBy.DISTANCE };
-        function done(d,st){ res(st===K.services.Status.OK ? d : []); }
-        if(kw) ps.keywordSearch(kw,done,opt);
-        else ps.categorySearch("FD6",done,opt);
-      }catch(e){ res(null); }
-    });
+/* 계열 하나, 또는 전부를 한 벌로 (같은 이름은 한 번만) */
+function menuPool(i){
+  var c=MENUS[i]||MENUS[0];
+  if(c.items) return c.items.slice();
+  var out=[], seen={};
+  MENUS.forEach(function(x){
+    (x.items||[]).forEach(function(n){ if(!seen[n]){ seen[n]=1; out.push(n); } });
   });
+  return out;
 }
-function knownName(n){
-  var s=String(n||"").trim();
-  return shops().some(function(x){ return String(x.name).trim()===s; });
+/* 목록 안에서 나를 품는 더 긴 이름들 — 탕수육⊃수육, 에그타르트⊃타르트 같은 짝.
+   한 번만 만들어 둔다 (MENUS 는 바뀌지 않는다). */
+var MENU_LONGER=null;
+function longerNames(name){
+  if(!MENU_LONGER){
+    MENU_LONGER={};
+    var all=menuPool(0);
+    all.forEach(function(a){
+      MENU_LONGER[a]=all.filter(function(b){ return b!==a && b.indexOf(a)>=0; });
+    });
+  }
+  return MENU_LONGER[name]||[];
 }
-function recoAdd(r){
-  return DATA.addShop({
-    name:r.place_name, wish:true, proposer:me, reason:"",
-    url:naverSearchUrl(r.place_name),
-    area:areaFromAddr(r.address_name||r.road_address_name),
-    lat:Number(r.y), lng:Number(r.x)
-  }).then(function(id){ return id ? DATA.setLike(id,me,true) : null; });
+/* 우표에 적은 음식 이름과 맞춰 본다 — "숙성 삼겹살" 은 삼겹살로 친다.
+   탕수육을 먹은 걸 수육으로 치면 안 되니, 더 긴 이름은 먼저 지우고 찾는다. */
+function menuAte(name){
+  var longer=longerNames(name);
+  var hit=stamps().filter(function(s){
+    var t=String(s.foodKo||"");
+    longer.forEach(function(b){ t=t.split(b).join(" "); });
+    return t.indexOf(name)>=0;
+  });
+  if(!hit.length) return null;
+  var last=hit.map(function(s){ return String(s.date||""); }).sort().pop();
+  return {n:hit.length, date:last};
 }
-function metres(d){
-  var n=Number(d);
-  if(!isFinite(n)) return "";
-  return n<1000 ? (n+"m") : ((n/1000).toFixed(1)+"km");
+function agoLabel(iso){
+  var d=daysSince(iso);
+  if(d<=0) return "오늘";
+  if(d<14) return d+"일 전";
+  if(d<60) return Math.round(d/7)+"주 전";
+  return Math.floor(d/30)+"개월 전";
+}
+/* 이미 위시에 있는 이름은 다시 권하지 않는다 (접어둔 것도 포함 — 겹쳐 담기지 않게) */
+function menuWished(name){
+  var s=String(name||"").trim();
+  return shops().some(function(x){ return x.wish && String(x.name).trim()===s; });
+}
+function menuAdd(name){
+  return DATA.addShop({ name:name, kind:"menu", wish:true, proposer:me, reason:"" })
+    .then(function(id){ return id ? DATA.setLike(id,me,true) : null; });
 }
 
 /* ── 데이터 뷰 ──────────────────────────────────────────── */
@@ -405,6 +437,8 @@ function stampsOfYear(y){
     });
 }
 function tempCount(){ return stamps().filter(function(s){ return !s.artPath; }).length; }
+/* 메뉴 줄 — 가게가 아니다. 이름만 있고 링크·동네·좌표가 없어서 지도에 찍지 않는다. */
+function isMenu(s){ return s.kind==="menu"; }
 function wishList(){ return shops().filter(function(s){ return s.wish && !s.folded; }); }
 function foldedList(){ return shops().filter(function(s){ return s.wish && s.folded; }); }
 function visitedShops(){ return shops().filter(function(s){ return !s.wish; }); }
@@ -688,11 +722,9 @@ function viewWish(){
   }
 
   var add=el("div","row2"); add.style.marginTop="18px";
-  if(kakaoKey()){
-    var rb=el("button","btn ghost","🎲 추천받기");
-    rb.onclick=function(){ openSheet({k:"reco"}); };
-    add.appendChild(rb);
-  }
+  var rb=el("button","btn ghost","🎲 뭐 먹지");
+  rb.onclick=function(){ openSheet({k:"menu"}); };
+  add.appendChild(rb);
   var a=el("button","btn ghost","＋ 추가");
   a.onclick=function(){ openSheet({k:"wish"}); };
   add.appendChild(a);
@@ -709,6 +741,7 @@ function wishCard(s,isHit){
   var d=daysSince(s.createdAt);
   if(!s.folded && d>=90) b.appendChild(el("div","stale",Math.floor(d/30)+"개월째 안 감"));
   var mr=el("div","meta-row");
+  if(isMenu(s)) mr.appendChild(el("span","area","메뉴"));
   if((s.area||"").trim()) mr.appendChild(el("span","area",s.area.trim()));
   var ln=linkEl(s.url);
   if(ln) mr.appendChild(ln);
@@ -978,7 +1011,8 @@ function shopRow(s){
 
 function viewMap(){
   var frag=document.createDocumentFragment();
-  var list=shops().filter(function(s){ return !(s.wish && s.folded); });
+  // 메뉴 줄은 가게가 아니라서 지도에 올리지 않는다
+  var list=shops().filter(function(s){ return !isMenu(s) && !(s.wish && s.folded); });
   if(!list.length){
     var e=el("div","empty");
     e.appendChild(el("div","t","아직 가게가 없어요"));
@@ -1030,7 +1064,7 @@ function viewMap(){
       var hint=el("div","mrow");
       hint.appendChild(el("span","st", isAdmin()
         ? "가게를 눌러 동네를 적으면 여기서 묶입니다"
-        : "동네는 관리자가 적습니다"));
+        : "가고 싶은 곳은 눌러서 동네를 적을 수 있어요 · 다녀온 가게는 관리자가 적습니다"));
       g.appendChild(hint);
     }
     frag.appendChild(g);
@@ -1077,7 +1111,7 @@ function drawSheetBody(host){
   bar.appendChild(h); bar.appendChild(x); inn.appendChild(bar);
   var body=el("div"); inn.appendChild(body);
   var map={"new":sheetNew,"detail":sheetDetail,"art":sheetArt,"wish":sheetWish,"shop":sheetShop,
-           "visited":sheetVisited,"settings":sheetSettings,"login":sheetLogin,"reco":sheetReco};
+           "visited":sheetVisited,"settings":sheetSettings,"login":sheetLogin,"menu":sheetMenu};
   (map[sheet.k]||function(){})(h,body);
 }
 
@@ -1113,13 +1147,15 @@ function sheetNew(h,body){
   var shopIn=document.createElement("input");
   shopIn.id="newShop"; shopIn.setAttribute("list","shopList"); shopIn.placeholder="가게 이름";
   var dl=document.createElement("datalist"); dl.id="shopList";
-  wishList().concat(visitedShops()).forEach(function(s){
+  // 메뉴 줄은 가게 이름이 아니다 — 자동완성에서 뺀다
+  var wishShops=wishList().filter(function(s){ return !isMenu(s); });
+  wishShops.concat(visitedShops()).forEach(function(s){
     var o=document.createElement("option"); o.value=s.name; dl.appendChild(o);
   });
   lShop.appendChild(shopIn); lShop.appendChild(dl);
-  if(wishList().length){
+  if(wishShops.length){
     lShop.appendChild(el("div","hint","★ 가고 싶은 곳: "+
-      wishList().slice(0,3).map(function(s){ return s.name; }).join(" · ")));
+      wishShops.slice(0,3).map(function(s){ return s.name; }).join(" · ")));
   }
   f.appendChild(lShop);
 
@@ -1555,10 +1591,40 @@ function sheetShop(h,body){
     f.appendChild(t);
   }
 
-  if(!isAdmin()){
+  /* 가고 싶은 곳은 셋 다 고치고 지울 수 있다 (RLS 도 wish = true 인 줄만 열어둔다).
+     다녀온 가게는 우표가 걸려 있어서 관리자만 손댄다. */
+  var canEdit = isAdmin() || s.wish;
+
+  /* 메뉴 줄은 가게가 아니다 — 고칠 게 이름뿐이고, 링크·동네 칸은 보여주지 않는다. */
+  if(isMenu(s)){
+    if(!canEdit){
+      f.appendChild(el("div","hint","메뉴예요. 👍 는 목록에서 누르면 돼요."));
+      body.appendChild(f);
+      return;
+    }
+    f.appendChild(el("div","sect","메뉴"));
+    var ml=el("label","fld"); ml.appendChild(el("span",null,"이름"));
+    var mIn=document.createElement("input"); mIn.id="mnn"; mIn.value=s.name||"";
+    ml.appendChild(mIn); f.appendChild(ml);
+    var msv=el("button","btn","저장");
+    msv.onclick=function(){
+      var nm=mIn.value.trim();
+      if(!nm){ toast("메뉴 이름을 적어주세요."); return; }
+      guard(function(){
+        return DATA.updateShop(s.id,{name:nm}).then(function(){ toast("저장했어요."); closeSheet(); });
+      });
+    };
+    f.appendChild(msv);
+    f.appendChild(foldBtn()); f.appendChild(delBtn());
+    body.appendChild(f);
+    return;
+  }
+
+  if(!canEdit){
     f.appendChild(el("div","sect","가게 정보"));
     var info=el("div","hint");
-    info.textContent=(s.area?("동네 "+s.area):"동네 미지정")+" · 수정은 관리자만 할 수 있어요.";
+    info.textContent=(s.area?("동네 "+s.area):"동네 미지정")+
+      " · 다녀온 가게라 수정은 관리자만 할 수 있어요.";
     f.appendChild(info);
     body.appendChild(f);
     return;
@@ -1609,7 +1675,10 @@ function sheetShop(h,body){
   };
   f.appendChild(sv);
 
-  if(s.wish){
+  if(s.wish){ f.appendChild(foldBtn()); f.appendChild(delBtn()); }
+  body.appendChild(f);
+
+  function foldBtn(){
     var fold=el("button","btn ghost", s.folded?"다시 펼치기":"접어두기");
     fold.onclick=function(){
       guard(function(){
@@ -1619,7 +1688,9 @@ function sheetShop(h,body){
         });
       });
     };
-    f.appendChild(fold);
+    return fold;
+  }
+  function delBtn(){
     var del=el("button","foldlink","이 추천 지우기");
     del.onclick=function(){
       del.textContent="정말 지울까요? 한 번 더 누르면 삭제됩니다";
@@ -1629,9 +1700,8 @@ function sheetShop(h,body){
         });
       };
     };
-    f.appendChild(del);
+    return del;
   }
-  body.appendChild(f);
 }
 
 function sheetVisited(h,body){
@@ -1687,144 +1757,148 @@ function sheetLogin(h,body){
   body.appendChild(f);
 }
 
-function sheetReco(h,body){
-  h.textContent="추천받기";
+function sheetMenu(h,body){
+  h.textContent="뭐 먹지";
   var f=el("div","form");
-  var center=recoCenter();
-  var catIdx=0, kw="", list=null, one=null, lastOne="", loading=false;
+  var catIdx=0, hideAte=true, one=null, lastOne="";
 
-  /* 기준 자리 */
-  var head=el("div","fld");
-  head.appendChild(el("span",null,"어디 둘레에서"));
-  var where=el("div","hint");
-  head.appendChild(where);
-  var ps=placeSearch(function(p){
-    center={lat:p.lat, lng:p.lng, label:p.name};
-    lsSet(LS_RECO, JSON.stringify(center));
-    list=null; one=null; draw(); run();
-  },"아무 가게나 찾아서 그 둘레로 기준을 옮길 수 있어요.");
-  f.appendChild(head);
-  if(ps) f.appendChild(ps);
+  f.appendChild(el("div","hint",
+    "가게가 아니라 메뉴를 고릅니다. 담으면 가고 싶은 곳에 메뉴로 들어가고, "+
+    "셋 다 👍 하면 그게 다음 약속 메뉴예요. 가게는 그다음에 고르면 됩니다."));
 
   /* 계열 칩 */
   var chips=el("div","pick");
-  RECO_CATS.forEach(function(c,i){
+  MENUS.forEach(function(c,i){
     var b=el("button",null,c.ko); b.type="button";
-    b.onclick=function(){ catIdx=i; kw=""; free.value=""; list=null; one=null; draw(); run(); };
+    b.onclick=function(){ catIdx=i; one=null; draw(); };
     chips.appendChild(b);
   });
-  f.appendChild(el("div","sect","뭘 먹을까"));
+  f.appendChild(el("div","sect","어떤 계열"));
   f.appendChild(chips);
 
-  var fr=el("div","row2");
-  var free=document.createElement("input");
-  free.type="search"; free.id="recokw"; free.placeholder="직접 적기 — 예: 막국수";
-  var fb=el("button","btn ghost sm","찾기"); fb.type="button"; fb.style.flex="0 0 74px";
-  function runFree(){
-    var v=free.value.trim();
-    if(!v) return;
-    kw=v; catIdx=-1; list=null; one=null; draw(); run();
-  }
-  fb.onclick=runFree;
-  free.onkeydown=function(e){ if(e.key==="Enter"){ e.preventDefault(); runFree(); } };
-  fr.appendChild(free); fr.appendChild(fb);
-  f.appendChild(fr);
+  var tg=el("button","foldlink"); tg.type="button";
+  tg.onclick=function(){ hideAte=!hideAte; one=null; draw(); };
+  f.appendChild(tg);
 
-  var dice=el("button","btn ghost","🎲 하나만 뽑기"); dice.type="button";
+  var dice=el("button","btn","🎲 하나만 뽑기"); dice.type="button";
   dice.onclick=function(){
-    if(!list || !list.length) return;
-    var pool=list.filter(function(r){ return r.place_name!==lastOne; });
-    if(!pool.length) pool=list;
+    var pool=visible();
+    if(!pool.length) return;
+    // 방금 뽑은 건 빼고 — 같은 게 두 번 나오면 뽑은 것 같지 않다
+    var p2=pool.filter(function(n){ return n!==lastOne; });
+    if(p2.length) pool=p2;
     one=pool[Math.floor(Math.random()*pool.length)];
-    lastOne=one.place_name;
+    lastOne=one;
     draw();
   };
   f.appendChild(dice);
 
+  /* 목록에 없는 것 직접 담기 */
+  var fr=el("div","row2");
+  var free=document.createElement("input");
+  free.type="search"; free.id="menukw"; free.placeholder="목록에 없는 메뉴 — 예: 평양냉면";
+  var fb=el("button","btn ghost sm","담기"); fb.type="button"; fb.style.flex="0 0 74px";
+  function addFree(){
+    var v=free.value.trim();
+    if(!v) return;
+    if(menuWished(v)){ toast("이미 담겨 있어요."); return; }
+    guard(function(){
+      return menuAdd(v).then(function(){
+        free.value=""; toast("가고 싶은 곳에 담았어요."); draw(); render();
+      });
+    });
+  }
+  fb.onclick=addFree;
+  free.onkeydown=function(e){ if(e.key==="Enter"){ e.preventDefault(); addFree(); } };
+  fr.appendChild(free); fr.appendChild(fb);
+  f.appendChild(fr);
+
   var out=el("div"); f.appendChild(out);
   body.appendChild(f);
 
-  function run(){
-    if(!center){ draw(); return; }
-    loading=true; draw();
-    var q=(catIdx>=0 ? RECO_CATS[catIdx].kw : kw);
-    recoSearch(q,center).then(function(rs){
-      loading=false;
-      list=(rs===null) ? null : rs.filter(function(r){ return !knownName(r.place_name); });
-      one=null;
-      draw();
+  /* 지금 권할 수 있는 것 — 이미 담은 건 빼고, 기본은 안 먹어본 것만 */
+  function visible(){
+    return menuPool(catIdx).filter(function(n){
+      if(menuWished(n)) return false;
+      return !(hideAte && menuAte(n));
     });
+  }
+  /* 안 먹어본 것 먼저, 그다음 오래 안 먹은 순 */
+  function byFresh(a,b){
+    var x=menuAte(a), y=menuAte(b);
+    if(!x && !y) return 0;          // 적어둔 순서를 지킨다
+    if(!x) return -1;
+    if(!y) return 1;
+    return String(x.date).localeCompare(String(y.date));
+  }
+  function ateLabel(n){
+    var a=menuAte(n);
+    if(!a) return "아직 안 먹어봤어요";
+    return agoLabel(a.date)+" 먹음"+(a.n>1 ? (" · "+a.n+"번") : "");
   }
 
   function draw(){
-    where.textContent = center
-      ? (center.label+" 둘레 5km")
-      : "기준이 없어요. 아래에서 가게를 하나 찾아 기준을 잡아주세요.";
     Array.prototype.forEach.call(chips.children,function(b,i){
       b.setAttribute("aria-pressed",String(i===catIdx));
     });
-    dice.hidden = !(list && list.length);
+    tg.textContent = hideAte ? "먹어본 메뉴도 보기" : "먹어본 메뉴 빼기";
+    var list=visible().sort(byFresh);
+    dice.hidden=!list.length;
     out.innerHTML="";
-
-    if(!center) return;
-    if(loading){ out.appendChild(el("div","hint","찾는 중…")); return; }
-    if(list===null){ out.appendChild(el("div","hint","검색을 불러오지 못했어요.")); return; }
+    if(one) out.appendChild(menuCard(one));
     if(!list.length){
-      out.appendChild(el("div","hint","둘레에 새로 담을 만한 곳이 없어요. 다른 계열이나 직접 적기로 찾아보세요."));
+      out.appendChild(el("div","hint", hideAte
+        ? "이 계열은 다 먹어봤거나 이미 담겨 있어요. 「먹어본 메뉴도 보기」를 눌러보세요."
+        : "이 계열은 다 담겨 있어요. 다른 계열을 골라보세요."));
       return;
     }
-    if(one) out.appendChild(recoCard(one,true));
-    out.appendChild(el("div","sect","둘레 "+list.length+"곳"));
+    out.appendChild(el("div","sect",MENUS[catIdx].ko+" "+list.length+"가지"));
     var box=el("div","psr");
-    list.forEach(function(r){ box.appendChild(recoRow(r)); });
+    list.forEach(function(n){ box.appendChild(menuRow(n)); });
     out.appendChild(box);
-    out.appendChild(el("div","hint","이미 담았거나 다녀온 집은 빼고 보여줍니다. 거리순이고, 맛 순위는 아닙니다."));
+    out.appendChild(el("div","hint",
+      "이미 담은 메뉴는 빼고 보여줍니다. 「언제 먹었는지」는 우표에 적은 음식 이름으로 맞춘 거라 "+
+      "가끔 틀립니다. 맛 순위는 아닙니다."));
   }
 
-  function shortCat(c){
-    var p=String(c||"").split(">").map(function(x){ return x.trim(); });
-    return p[p.length-1]||"";
+  function menuRow(n){
+    var row=el("div","psrow recorow");
+    var L=el("div","l");
+    L.appendChild(el("span","nm",n));
+    L.appendChild(el("span","ad",ateLabel(n)));
+    row.appendChild(L);
+    row.appendChild(addBtn(n));
+    return row;
   }
-  function addBtn(r,big){
-    var b=el("button", big?"btn":"btn ghost sm", "＋ 담기"); b.type="button";
+  function menuCard(n){
+    var c=el("div","pincard wish");
+    c.appendChild(el("div","nm","오늘은 "+n+" 어때요"));
+    c.appendChild(el("div","st",ateLabel(n)));
+    var act=el("div","act");
+    var again=el("button","btn ghost sm","다시 뽑기"); again.type="button";
+    again.onclick=dice.onclick;
+    act.appendChild(again);
+    act.appendChild(addBtn(n));
+    c.appendChild(act);
+    return c;
+  }
+  function addBtn(n){
+    var b=el("button","btn ghost sm","＋ 담기"); b.type="button";
     b.onclick=function(ev){
       ev.stopPropagation();
       b.disabled=true; b.textContent="담는 중…";
       guard(function(){
-        return recoAdd(r).then(function(){
+        return menuAdd(n).then(function(){
           toast("가고 싶은 곳에 담았어요.");
-          list=list.filter(function(x){ return x.place_name!==r.place_name; });
-          if(one && one.place_name===r.place_name) one=null;
+          if(one===n) one=null;
           draw(); render();
         });
       });
     };
     return b;
   }
-  function recoRow(r){
-    var row=el("div","psrow recorow");
-    var L=el("div","l");
-    L.appendChild(el("span","nm",r.place_name));
-    L.appendChild(el("span","ad",shortCat(r.category_name)+" · "+metres(r.distance)));
-    row.appendChild(L);
-    row.appendChild(addBtn(r,false));
-    return row;
-  }
-  function recoCard(r){
-    var c=el("div","pincard");
-    c.appendChild(el("div","nm",r.place_name));
-    c.appendChild(el("div","st",shortCat(r.category_name)+" · "+metres(r.distance)+
-      " · "+(r.road_address_name||r.address_name||"")));
-    var act=el("div","act");
-    var ln=linkEl(naverSearchUrl(r.place_name));
-    if(ln) act.appendChild(ln);
-    act.appendChild(addBtn(r,false));
-    c.appendChild(act);
-    return c;
-  }
 
   draw();
-  if(center) run();
 }
 
 function sheetSettings(h,body){

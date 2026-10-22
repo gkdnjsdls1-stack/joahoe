@@ -53,6 +53,8 @@ function normShop(r){
     id: r.id, name: r.name || "", wish: !!r.wish, proposer: r.proposer || "",
     folded: !!r.folded, reason: r.reason || "", url: r.url || "", area: r.area || "",
     lat: num(r.lat), lng: num(r.lng), gid: r.gid || "app",
+    // 'menu' 는 가게가 아니라 메뉴 이름만 있는 줄이다 (지도에 찍히지 않는다)
+    kind: r.kind === "menu" ? "menu" : "shop",
     createdAt: r.created_at, visitedAt: r.visited_at
   };
 }
@@ -198,6 +200,11 @@ DATA.saveSettings = function(patch){
   });
 };
 
+/* kind 칸이 아직 없는 데이터베이스인가 (schema.sql 을 다시 안 돌린 경우) */
+function noKindCol(err){
+  var m = ((err && err.message) || "") + " " + ((err && err.code) || "");
+  return /kind/i.test(m) && /PGRST204|42703|column|schema cache/i.test(m);
+}
 DATA.addShop = function(s){
   var row = {
     name: s.name, wish: s.wish !== false, proposer: s.proposer || "",
@@ -210,11 +217,30 @@ DATA.addShop = function(s){
   // 좌표는 있을 때만 싣는다. 스키마를 아직 안 돌렸어도 추가가 막히지 않게.
   var la = num(s.lat), ln = num(s.lng);
   if(la !== null && ln !== null){ row.lat = la; row.lng = ln; }
-  return sb.from("shops").insert(row).select().then(function(r){
-    if(r.error) throw r.error;
+  // 메뉴 줄. kind 칸이 없으면 칸을 빼고 다시 넣는다 — 그냥 가게 한 줄이 되지만,
+  // 담기가 막히는 것보다는 낫다. (schema.sql 을 한 번 더 Run 하면 제대로 들어간다)
+  if(s.kind === "menu") row.kind = "menu";
+  function put(r){
+    return sb.from("shops").insert(r).select().then(function(x){
+      if(x.error) throw x.error;
+      return x;
+    });
+  }
+  return put(row).catch(function(e){
+    if(!row.kind || !noKindCol(e)) throw e;
+    delete row.kind;
+    return put(row);
+  }).then(function(r){
     return reload().then(function(){ return (r.data && r.data[0]) ? r.data[0].id : null; });
   });
 };
+/* 권한에 막히면 Postgres 는 에러가 아니라 "0줄 바뀜" 으로 돌려준다.
+   그대로 두면 아무 일도 안 일어났는데 "저장했어요" 가 뜬다 — 줄 수를 세서 막는다. */
+function nothingTouched(){
+  var e = new Error("row-level security: 손댈 수 있는 줄이 없습니다");
+  e.code = "42501";
+  return e;
+}
 DATA.updateShop = function(id, patch){
   var o = {};
   if("name" in patch) o.name = patch.name;
@@ -224,14 +250,16 @@ DATA.updateShop = function(id, patch){
   if("lng" in patch) o.lng = num(patch.lng);
   if("folded" in patch) o.folded = patch.folded;
   if("wish" in patch){ o.wish = patch.wish; if(patch.wish === false) o.visited_at = new Date().toISOString(); }
-  return sb.from("shops").update(o).eq("id", id).then(function(r){
+  return sb.from("shops").update(o).eq("id", id).select().then(function(r){
     if(r.error) throw r.error;
+    if(!r.data || !r.data.length) throw nothingTouched();
     return reload();
   });
 };
 DATA.deleteShop = function(id){
-  return sb.from("shops").delete().eq("id", id).then(function(r){
+  return sb.from("shops").delete().eq("id", id).select().then(function(r){
     if(r.error) throw r.error;
+    if(!r.data || !r.data.length) throw nothingTouched();
     return reload();
   });
 };
