@@ -1612,8 +1612,10 @@ function sheetShop(h,body){
     msv.onclick=function(){
       var nm=mIn.value.trim();
       if(!nm){ toast("메뉴 이름을 적어주세요."); return; }
+      var mp={name:nm};
+      if(reasonIn) mp.reason=reasonIn.value.trim();   // 남의 한 줄은 건드리지 않는다
       guard(function(){
-        return DATA.updateShop(s.id,{name:nm, reason:reasonIn.value.trim()})
+        return DATA.updateShop(s.id,mp)
           .then(function(){ toast("저장했어요."); closeSheet(); });
       });
     };
@@ -1668,7 +1670,7 @@ function sheetShop(h,body){
     var raw=uIn.value.trim(), safe=safeUrl(raw);
     if(raw && !safe){ toast("링크 주소를 확인해주세요."); return; }
     var patch={name:nm,url:safe,area:aIn.value.trim()};
-    if(s.wish) patch.reason=reasonIn.value.trim();
+    if(s.wish && reasonIn) patch.reason=reasonIn.value.trim();   // 남의 한 줄은 건드리지 않는다
     // 검색으로 고른 가게일 때만 좌표를 건드린다. 손으로 고친 경우 기존 좌표를 지우지 않는다.
     if(pick && pick.name===nm){ patch.lat=pick.lat; patch.lng=pick.lng; }
     guard(function(){
@@ -1685,8 +1687,19 @@ function sheetShop(h,body){
   body.appendChild(f);
 
   /* 한 줄 이유 — 가고 싶은 곳 카드에 「누구: 이유」로 뜨는 그 줄.
-     쓴 사람이 아니어도 고칠 수 있다. 셋이 같이 쓰는 목록이라 그렇다. */
+     이름·링크·동네는 셋 다 고치지만, 이 한 줄만은 쓴 사람 것으로 둔다.
+     주인이 없는 옛 줄(추천한 사람이 비어 있는 줄)은 누구나 적을 수 있다.
+     `누구세요?` 는 보안이 아니라서 이건 막는 게 아니라 예의에 가깝다 (README 참고). */
   function reasonField(){
+    if(s.proposer && s.proposer!==me){
+      var w=el("div","fld");
+      w.appendChild(el("span",null,"한 줄 이유"));
+      var nm=memberName(s.proposer)||"추천한 사람";
+      w.appendChild(el("div","hint", s.reason
+        ? "「"+s.reason+"」 — "+nm+" 이(가) 쓴 줄이라 그대로 둡니다."
+        : nm+" 이(가) 쓸 수 있는 줄이에요. 비어 있습니다."));
+      return w;
+    }
     var l=el("label","fld"); l.appendChild(el("span",null,"한 줄 이유 (선택)"));
     reasonIn=document.createElement("input");
     reasonIn.id="shr"; reasonIn.value=s.reason||"";
