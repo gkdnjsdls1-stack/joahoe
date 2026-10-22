@@ -55,6 +55,7 @@ function normShop(r){
     lat: num(r.lat), lng: num(r.lng), gid: r.gid || "app",
     // 'menu' 는 가게가 아니라 메뉴 이름만 있는 줄이다 (지도에 찍히지 않는다)
     kind: r.kind === "menu" ? "menu" : "shop",
+    parentId: r.parent_id || null,   // 어느 메뉴에 딸린 가게인가
     createdAt: r.created_at, visitedAt: r.visited_at
   };
 }
@@ -200,10 +201,14 @@ DATA.saveSettings = function(patch){
   });
 };
 
-/* kind 칸이 아직 없는 데이터베이스인가 (schema.sql 을 다시 안 돌린 경우) */
-function noKindCol(err){
+/* 아직 없는 칸 때문에 막힌 건가 (schema.sql 을 다시 안 돌린 경우).
+   막은 칸 이름을 돌려준다 — 그 칸만 빼고 다시 넣어본다. */
+function missingCol(err){
   var m = ((err && err.message) || "") + " " + ((err && err.code) || "");
-  return /kind/i.test(m) && /PGRST204|42703|column|schema cache/i.test(m);
+  if(!/PGRST204|42703|column|schema cache/i.test(m)) return null;
+  if(/parent_id/i.test(m)) return "parent_id";
+  if(/kind/i.test(m)) return "kind";
+  return null;
 }
 DATA.addShop = function(s){
   var row = {
@@ -217,20 +222,26 @@ DATA.addShop = function(s){
   // 좌표는 있을 때만 싣는다. 스키마를 아직 안 돌렸어도 추가가 막히지 않게.
   var la = num(s.lat), ln = num(s.lng);
   if(la !== null && ln !== null){ row.lat = la; row.lng = ln; }
-  // 메뉴 줄. kind 칸이 없으면 칸을 빼고 다시 넣는다 — 그냥 가게 한 줄이 되지만,
-  // 담기가 막히는 것보다는 낫다. (schema.sql 을 한 번 더 Run 하면 제대로 들어간다)
+  // 메뉴 줄과 "어느 메뉴에 딸렸는가". 칸이 없으면 그 칸만 빼고 다시 넣는다 —
+  // 묶임이나 메뉴 표시를 잃을 뿐 담기는 되게 한다.
+  // (schema.sql 을 한 번 더 Run 하면 제대로 들어간다)
   if(s.kind === "menu") row.kind = "menu";
+  if(s.parentId) row.parent_id = s.parentId;
   function put(r){
     return sb.from("shops").insert(r).select().then(function(x){
       if(x.error) throw x.error;
       return x;
     });
   }
-  return put(row).catch(function(e){
-    if(!row.kind || !noKindCol(e)) throw e;
-    delete row.kind;
-    return put(row);
-  }).then(function(r){
+  function tryPut(r, left){
+    return put(r).catch(function(e){
+      var col = left > 0 ? missingCol(e) : null;
+      if(!col || !(col in r)) throw e;
+      delete r[col];
+      return tryPut(r, left - 1);
+    });
+  }
+  return tryPut(row, 2).then(function(r){
     return reload().then(function(){ return (r.data && r.data[0]) ? r.data[0].id : null; });
   });
 };
@@ -250,6 +261,7 @@ DATA.updateShop = function(id, patch){
   if("lat" in patch) o.lat = num(patch.lat);
   if("lng" in patch) o.lng = num(patch.lng);
   if("folded" in patch) o.folded = patch.folded;
+  if("parentId" in patch) o.parent_id = patch.parentId || null;
   if("wish" in patch){ o.wish = patch.wish; if(patch.wish === false) o.visited_at = new Date().toISOString(); }
   return sb.from("shops").update(o).eq("id", id).select().then(function(r){
     if(r.error) throw r.error;

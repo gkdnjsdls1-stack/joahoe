@@ -437,8 +437,15 @@ function stampsOfYear(y){
     });
 }
 function tempCount(){ return stamps().filter(function(s){ return !s.artPath; }).length; }
-/* 메뉴 줄 — 가게가 아니다. 이름만 있고 링크·동네·좌표가 없어서 지도에 찍지 않는다. */
+/* 메뉴 줄 — 가게가 아니다. 이름만 있고 링크·동네·좌표가 없어서 지도에 찍지 않는다.
+   메뉴 아래에는 "그 메뉴를 먹을 만한 가게"가 딸린다 (parentId). */
 function isMenu(s){ return s.kind==="menu"; }
+function shopById(id){ return id ? shops().filter(function(s){ return s.id===id; })[0]||null : null; }
+function childrenOf(id){
+  return shops().filter(function(s){ return s.parentId===id && s.wish && !s.folded; });
+}
+/* 부모가 지워졌거나 접혀 있으면 그 가게는 윗줄로 올라온다 — 숨어버리지 않게 */
+function isChild(s){ var p=shopById(s.parentId); return !!(p && p.wish && !p.folded); }
 function wishList(){ return shops().filter(function(s){ return s.wish && !s.folded; }); }
 function foldedList(){ return shops().filter(function(s){ return s.wish && s.folded; }); }
 function visitedShops(){ return shops().filter(function(s){ return !s.wish; }); }
@@ -673,12 +680,16 @@ function dotsEl(att){
 /* ── 가고 싶은 곳 ───────────────────────────────────────── */
 function viewWish(){
   var frag=document.createDocumentFragment();
-  var all=wishList().slice().sort(function(a,b){
+  var byLike=function(a,b){
     return likeScore(b)-likeScore(a) ||
            String(b.createdAt||"").localeCompare(String(a.createdAt||""));
-  });
-  var hit=all.filter(allLiked);
-  var rest=all.filter(function(s){ return !allLiked(s); });
+  };
+  var all=wishList();
+  /* 메뉴에 딸린 가게는 그 메뉴 밑에서만 보인다 — 윗줄에 또 나오지 않게 */
+  var tops=all.filter(function(s){ return !isChild(s); }).sort(byLike);
+  var hit=tops.filter(allLiked);
+  var places=tops.filter(function(s){ return !allLiked(s) && !isMenu(s); });
+  var menus=tops.filter(function(s){ return !allLiked(s) && isMenu(s); });
 
   if(!all.length){
     var e=el("div","empty");
@@ -692,14 +703,21 @@ function viewWish(){
     if(hit.length){
       frag.appendChild(el("div","sect","★ 모두 가고 싶은 곳"));
       var w1=el("div","wish");
-      hit.forEach(function(s){ w1.appendChild(wishCard(s,true)); });
+      hit.forEach(function(s){ w1.appendChild(wishBlock(s,true)); });
       frag.appendChild(w1);
     }
-    if(rest.length){
-      if(hit.length) frag.appendChild(el("hr","disc"));
+    if(places.length){
+      frag.appendChild(el("div","sect","가게 "+places.length));
       var w2=el("div","wish");
-      rest.forEach(function(s){ w2.appendChild(wishCard(s,false)); });
+      places.forEach(function(s){ w2.appendChild(wishBlock(s,false)); });
       frag.appendChild(w2);
+    }
+    if(menus.length){
+      frag.appendChild(el("div","sect","메뉴 "+menus.length));
+      var w4=el("div","wish");
+      menus.forEach(function(s){ w4.appendChild(wishBlock(s,false)); });
+      frag.appendChild(w4);
+      frag.appendChild(el("div","hint","메뉴를 누르면 그 메뉴를 먹을 가게를 찾아 아래에 묶을 수 있어요."));
     }
   }
 
@@ -732,6 +750,20 @@ function viewWish(){
   return frag;
 }
 
+/* 메뉴 한 줄 + 그 아래 묶인 가게들. 가게 줄이면 카드 하나로 끝난다. */
+function wishBlock(s,isHit){
+  var kids=isMenu(s) ? childrenOf(s.id) : [];
+  if(!kids.length) return wishCard(s,isHit);
+  var box=el("div","mblock");
+  box.appendChild(wishCard(s,isHit));
+  var sub=el("div","wsub");
+  kids.slice().sort(function(a,b){
+    return likeScore(b)-likeScore(a) || String(a.name).localeCompare(String(b.name),"ko");
+  }).forEach(function(k){ sub.appendChild(wishCard(k,allLiked(k))); });
+  box.appendChild(sub);
+  return box;
+}
+
 function wishCard(s,isHit){
   var c=el("div","wcard"+(isHit?" hit":""));
   var b=el("div","body");
@@ -741,7 +773,11 @@ function wishCard(s,isHit){
   var d=daysSince(s.createdAt);
   if(!s.folded && d>=90) b.appendChild(el("div","stale",Math.floor(d/30)+"개월째 안 감"));
   var mr=el("div","meta-row");
-  if(isMenu(s)) mr.appendChild(el("span","area","메뉴"));
+  if(isMenu(s)){
+    mr.appendChild(el("span","area","메뉴"));
+    var kn=childrenOf(s.id).length;
+    mr.appendChild(el("span","hint", kn ? ("가게 "+kn+"곳") : "가게 찾는 중"));
+  }
   if((s.area||"").trim()) mr.appendChild(el("span","area",s.area.trim()));
   var ln=linkEl(s.url);
   if(ln) mr.appendChild(ln);
@@ -1091,9 +1127,15 @@ function drawSheet(){
   if(ae && host.contains(ae) && (ae.tagName==="INPUT"||ae.tagName==="TEXTAREA") && ae.id){
     keep={id:ae.id, v:ae.value, s:ae.selectionStart, e:ae.selectionEnd};
   }
+  // 보던 자리도 되돌려 놓는다 — 긴 목록에서 하나 담을 때마다 맨 위로 튀지 않게
+  var old=host.querySelector(".sheet"), top=old?old.scrollTop:0;
   host.innerHTML="";
   if(!sheet) return;
   drawSheetBody(host);
+  if(top){
+    var sh=host.querySelector(".sheet");
+    if(sh) sh.scrollTop=top;
+  }
   if(keep){
     var n=document.getElementById(keep.id);
     if(n){
@@ -1565,6 +1607,25 @@ function sheetShop(h,body){
   f.appendChild(el("div","hint", s.wish
     ? (memberName(s.proposer)||"누군가")+" 추천 · 👍 "+likeScore(s)+"명"
     : "우표 "+mine.length+"장"));
+
+  /* 어느 메뉴에 묶인 가게인가 */
+  var par=shopById(s.parentId);
+  if(par){
+    var pw=el("div","fld");
+    pw.appendChild(el("div","hint","「"+par.name+"」 메뉴에 묶여 있어요."));
+    if(s.wish){
+      var unb=el("button","btn ghost sm","묶기 풀기"); unb.type="button";
+      unb.onclick=function(){
+        guard(function(){
+          return DATA.updateShop(s.id,{parentId:null}).then(function(){
+            toast("묶기를 풀었어요."); closeSheet();
+          });
+        });
+      };
+      pw.appendChild(unb);
+    }
+    f.appendChild(pw);
+  }
   var ln=linkEl(s.url);
   if(ln){ var w=el("div"); w.appendChild(ln); f.appendChild(w); }
 
@@ -1620,6 +1681,65 @@ function sheetShop(h,body){
       });
     };
     f.appendChild(msv);
+
+    /* 이 메뉴를 먹을 가게들 — 찾아서 메뉴 밑에 묶는다.
+       같은 메뉴에 가게가 둘이면 둘 다 여기 붙는다. */
+    f.appendChild(el("div","sect","이 메뉴를 먹을 가게"));
+    var kids=childrenOf(s.id);
+    if(kids.length){
+      var kb=el("div","psr");
+      kids.slice().sort(function(a,b){ return String(a.name).localeCompare(String(b.name),"ko"); })
+        .forEach(function(k){
+          var row=el("div","psrow recorow");
+          var L=el("div","l");
+          L.appendChild(el("span","nm",k.name));
+          L.appendChild(el("span","ad",((k.area||"동네 미지정")+" · 👍 "+likeScore(k)+"명")));
+          row.appendChild(L);
+          var un=el("button","btn ghost sm","묶기 풀기"); un.type="button";
+          un.onclick=function(){
+            guard(function(){
+              return DATA.updateShop(k.id,{parentId:null}).then(function(){
+                toast("묶기를 풀었어요. 가게 목록으로 올라갑니다.");
+                drawSheet(); render();
+              });
+            });
+          };
+          row.appendChild(un);
+          kb.appendChild(row);
+        });
+      f.appendChild(kb);
+    }else{
+      f.appendChild(el("div","hint","아직 없어요. 아래에서 찾아 담으면 이 메뉴 밑에 묶입니다."));
+    }
+    var mps=placeSearch(function(p){
+      guard(function(){
+        // 이미 가고 싶은 곳에 있는 가게면 새로 만들지 않고 이 메뉴 밑으로 옮긴다
+        var same=shops().filter(function(x){
+          return x.wish && !isMenu(x) && String(x.name).trim()===String(p.name).trim();
+        })[0];
+        if(same){
+          if(same.parentId===s.id){ toast("이미 이 메뉴에 묶여 있어요."); return null; }
+          return DATA.updateShop(same.id,{parentId:s.id}).then(function(){
+            toast("이미 있던 가게를 이 메뉴로 묶었어요.");
+            drawSheet(); render();
+          });
+        }
+        return DATA.addShop({
+          name:p.name, wish:true, proposer:me, reason:"",
+          url:p.url, area:p.area, lat:p.lat, lng:p.lng, parentId:s.id
+        }).then(function(id){
+          return id ? DATA.setLike(id,me,true) : null;
+        }).then(function(){
+          toast("「"+s.name+"」 밑에 담았어요.");
+          drawSheet(); render();
+        });
+      });
+    },"고르면 이 메뉴 밑에 바로 묶입니다. 같은 메뉴에 여러 곳을 담아도 됩니다.");
+    if(mps) f.appendChild(mps);
+    else f.appendChild(el("div","hint",
+      "가게 검색을 켜면(README 「가게 검색」) 여기서 찾아 묶을 수 있어요. "+
+      "지금은 ＋ 추가로 가게를 따로 넣어주세요."));
+
     f.appendChild(foldBtn()); f.appendChild(delBtn());
     body.appendChild(f);
     return;
@@ -1721,7 +1841,10 @@ function sheetShop(h,body){
     return fold;
   }
   function delBtn(){
-    var del=el("button","foldlink","이 추천 지우기");
+    var kn=isMenu(s) ? childrenOf(s.id).length : 0;
+    var del=el("button","foldlink", kn
+      ? "이 메뉴 지우기 (묶인 가게 "+kn+"곳은 남습니다)"
+      : "이 추천 지우기");
     del.onclick=function(){
       del.textContent="정말 지울까요? 한 번 더 누르면 삭제됩니다";
       del.onclick=function(){
@@ -1790,7 +1913,12 @@ function sheetLogin(h,body){
 function sheetMenu(h,body){
   h.textContent="뭐 먹지";
   var f=el("div","form");
-  var catIdx=0, hideAte=true, one=null, lastOne="";
+  /* 고른 계열과 뽑은 메뉴는 sheet 에 얹어 둔다.
+     하나 담으면 데이터가 새로 와서 시트가 통째로 다시 그려지는데,
+     그때 여기 지역 변수에 뒀으면 계열이 「아무거나」로 되돌아간다. */
+  if(typeof sheet.cat!=="number") sheet.cat=0;
+  if(typeof sheet.ate!=="boolean") sheet.ate=true;   // 먹어본 메뉴 숨김
+  var catIdx=sheet.cat, hideAte=sheet.ate, one=sheet.one||null, lastOne=sheet.last||"";
 
   f.appendChild(el("div","hint",
     "가게가 아니라 메뉴를 고릅니다. 담으면 가고 싶은 곳에 메뉴로 들어가고, "+
@@ -1800,14 +1928,14 @@ function sheetMenu(h,body){
   var chips=el("div","pick");
   MENUS.forEach(function(c,i){
     var b=el("button",null,c.ko); b.type="button";
-    b.onclick=function(){ catIdx=i; one=null; draw(); };
+    b.onclick=function(){ catIdx=sheet.cat=i; one=sheet.one=null; draw(); };
     chips.appendChild(b);
   });
   f.appendChild(el("div","sect","어떤 계열"));
   f.appendChild(chips);
 
   var tg=el("button","foldlink"); tg.type="button";
-  tg.onclick=function(){ hideAte=!hideAte; one=null; draw(); };
+  tg.onclick=function(){ hideAte=sheet.ate=!hideAte; one=sheet.one=null; draw(); };
   f.appendChild(tg);
 
   var dice=el("button","btn","🎲 하나만 뽑기"); dice.type="button";
@@ -1817,8 +1945,8 @@ function sheetMenu(h,body){
     // 방금 뽑은 건 빼고 — 같은 게 두 번 나오면 뽑은 것 같지 않다
     var p2=pool.filter(function(n){ return n!==lastOne; });
     if(p2.length) pool=p2;
-    one=pool[Math.floor(Math.random()*pool.length)];
-    lastOne=one;
+    one=sheet.one=pool[Math.floor(Math.random()*pool.length)];
+    lastOne=sheet.last=one;
     draw();
   };
   f.appendChild(dice);
@@ -1920,7 +2048,7 @@ function sheetMenu(h,body){
       guard(function(){
         return menuAdd(n).then(function(){
           toast("가고 싶은 곳에 담았어요.");
-          if(one===n) one=null;
+          if(one===n) one=sheet.one=null;
           draw(); render();
         });
       });

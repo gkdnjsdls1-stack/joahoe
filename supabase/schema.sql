@@ -49,6 +49,11 @@ alter table shops add column if not exists lng double precision;
 -- 그때는 메뉴가 그냥 가게 한 줄로 들어갑니다.
 alter table shops add column if not exists kind text not null default 'shop';
 
+-- 메뉴 아래에 딸린 가게. "마라탕" 메뉴 줄 밑에 마라탕집 둘이 묶이는 식입니다.
+-- 메뉴를 지우면 딸린 가게는 사라지지 않고 그냥 가고 싶은 곳으로 올라옵니다 (set null).
+alter table shops add column if not exists parent_id uuid references shops(id) on delete set null;
+create index if not exists shops_parent_idx on shops(parent_id);
+
 create table if not exists stamps (
   id          uuid primary key default gen_random_uuid(),
   shop_id     uuid references shops(id) on delete set null,

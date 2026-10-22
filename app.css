@@ -125,6 +125,12 @@ header{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:va
 .wcard .nm{font-weight:600;font-size:15px;overflow-wrap:anywhere}
 .wcard .why{font-size:12.5px;color:var(--ink-soft);overflow-wrap:anywhere}
 .wcard .stale{font-family:var(--f-mono);font-size:11px;color:var(--gold)}
+/* 메뉴 한 줄과 그 밑에 묶인 가게들 */
+.mblock{display:flex;flex-direction:column;gap:7px}
+.wsub{display:flex;flex-direction:column;gap:7px;margin-left:13px;padding-left:11px;
+  border-left:2px solid var(--line)}
+.wsub .wcard{padding:9px 11px}
+.wsub .nm{font-size:14px}
 .likebtn{background:none;border:1px solid var(--line);border-radius:999px;padding:5px 8px;display:flex;gap:3px;align-items:center}
 .disc{margin:18px 0;border:0;border-top:1px solid var(--line)}
 .foldlink{background:none;border:0;padding:8px 0;font-size:13px;color:var(--ink-soft);display:block;text-align:left}
