@@ -410,9 +410,29 @@ function menuWished(name){
   var s=String(name||"").trim();
   return shops().some(function(x){ return x.wish && String(x.name).trim()===s; });
 }
+/* 이름에 메뉴가 들어간, 아직 어디에도 안 묶인 가게들.
+   「닭발」 → 아재불닭발 · 닭발어때. 담을 때 이것들을 자동으로 밑에 묶는다. */
+function shopsNamed(menuName){
+  var n=String(menuName||"").trim();
+  if(n.length<2) return [];
+  return shops().filter(function(x){
+    return x.wish && !x.folded && !isMenu(x) && !x.parentId &&
+           String(x.name).indexOf(n)>=0;
+  });
+}
 function menuAdd(name){
+  var kids=shopsNamed(name);
   return DATA.addShop({ name:name, kind:"menu", wish:true, proposer:me, reason:"" })
-    .then(function(id){ return id ? DATA.setLike(id,me,true) : null; });
+    .then(function(id){
+      if(!id) return 0;
+      return DATA.setLike(id,me,true).then(function(){
+        if(!kids.length) return 0;
+        // 이미 담아둔 가게가 있으면 새 메뉴 밑으로 모아준다
+        return Promise.all(kids.map(function(x){
+          return DATA.updateShop(x.id,{parentId:id});
+        })).then(function(){ return kids.length; });
+      });
+    });
 }
 
 /* ── 데이터 뷰 ──────────────────────────────────────────── */
@@ -1711,6 +1731,44 @@ function sheetShop(h,body){
     }else{
       f.appendChild(el("div","hint","아직 없어요. 아래에서 찾아 담으면 이 메뉴 밑에 묶입니다."));
     }
+    /* 이미 가고 싶은 곳에 있는 가게를 이 메뉴로 묶기.
+       이름이 맞는 것(닭발 → 아재불닭발)을 위로 올려준다. */
+    var pool=shops().filter(function(x){
+      return x.wish && !x.folded && !isMenu(x) && x.parentId!==s.id;
+    });
+    if(pool.length){
+      var mn=String(s.name).trim();
+      var hitName=function(x){ return mn.length>1 && String(x.name).indexOf(mn)>=0; };
+      pool.sort(function(a,b){
+        return (hitName(a)?0:1)-(hitName(b)?0:1) ||
+               String(a.name).localeCompare(String(b.name),"ko");
+      });
+      var pb=el("div","psr");
+      pool.forEach(function(x){
+        var row=el("div","psrow recorow");
+        var L=el("div","l");
+        L.appendChild(el("span","nm",x.name));
+        var par2=shopById(x.parentId);
+        L.appendChild(el("span","ad",
+          (hitName(x) ? "이름이 맞아요 · " : "")+
+          (par2 ? ("지금은 「"+par2.name+"」 밑") : (x.area||"동네 미지정"))));
+        row.appendChild(L);
+        var tie=el("button","btn ghost sm","묶기"); tie.type="button";
+        tie.onclick=function(){
+          guard(function(){
+            return DATA.updateShop(x.id,{parentId:s.id}).then(function(){
+              toast("「"+s.name+"」 밑에 묶었어요.");
+              drawSheet(); render();
+            });
+          });
+        };
+        row.appendChild(tie);
+        pb.appendChild(row);
+      });
+      f.appendChild(el("div","sect","이미 담아둔 가게에서 고르기"));
+      f.appendChild(pb);
+    }
+
     var mps=placeSearch(function(p){
       guard(function(){
         // 이미 가고 싶은 곳에 있는 가게면 새로 만들지 않고 이 메뉴 밑으로 옮긴다
@@ -1961,8 +2019,11 @@ function sheetMenu(h,body){
     if(!v) return;
     if(menuWished(v)){ toast("이미 담겨 있어요."); return; }
     guard(function(){
-      return menuAdd(v).then(function(){
-        free.value=""; toast("가고 싶은 곳에 담았어요."); draw(); render();
+      return menuAdd(v).then(function(k){
+        free.value="";
+        toast(k ? ("담았어요. 이름이 맞는 가게 "+k+"곳도 밑에 묶었어요.")
+                : "가고 싶은 곳에 담았어요.");
+        draw(); render();
       });
     });
   }
@@ -1990,9 +2051,10 @@ function sheetMenu(h,body){
     return String(x.date).localeCompare(String(y.date));
   }
   function ateLabel(n){
-    var a=menuAte(n);
-    if(!a) return "아직 안 먹어봤어요";
-    return agoLabel(a.date)+" 먹음"+(a.n>1 ? (" · "+a.n+"번") : "");
+    var a=menuAte(n), t;
+    t = a ? (agoLabel(a.date)+" 먹음"+(a.n>1 ? (" · "+a.n+"번") : "")) : "아직 안 먹어봤어요";
+    var k=shopsNamed(n).length;
+    return k ? (t+" · 담아둔 가게 "+k+"곳") : t;
   }
 
   function draw(){
@@ -2046,8 +2108,9 @@ function sheetMenu(h,body){
       ev.stopPropagation();
       b.disabled=true; b.textContent="담는 중…";
       guard(function(){
-        return menuAdd(n).then(function(){
-          toast("가고 싶은 곳에 담았어요.");
+        return menuAdd(n).then(function(k){
+          toast(k ? ("담았어요. 이름이 맞는 가게 "+k+"곳도 밑에 묶었어요.")
+                  : "가고 싶은 곳에 담았어요.");
           if(one===n) one=sheet.one=null;
           draw(); render();
         });
