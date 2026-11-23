@@ -66,6 +66,7 @@ function copyText(text,okMsg){
     navigator.clipboard.writeText(text).then(function(){ toast(okMsg); }, fallback);
   }else fallback();
 }
+var noteState = {};      // 우표id → 내 한 줄 저장 상태 {s:"typing"|"saving"|"saved"|"error"}
 var pendingStamp = "";   // 링크로 들어온 우표. 데이터가 오고 이름을 고른 뒤에 연다.
 function openPendingStamp(){
   if(!pendingStamp) return;
@@ -1330,6 +1331,82 @@ function sheetNew(h,body){
   body.appendChild(f);
 }
 
+/* 내 한 줄 — 쓰고 [저장] 을 누르면 다른 사람 줄처럼 글자로 보인다. [고치기] 로 다시 연다.
+ * 시트는 데이터가 올 때마다 다시 그려지니 쓰던 글과 상태는 noteState 에 둔다. */
+function myNoteEl(st,mid,txt){
+  var ns=noteState[st.id]||{};
+  var editing=ns.edit || !txt;
+  var box=el("div","edit");
+
+  if(!editing){
+    var row=el("div","noterow");
+    row.appendChild(el("div","txt",txt));
+    var fix=el("button","fixlink","고치기");
+    fix.onclick=function(){
+      noteState[st.id]={edit:true,draft:txt};
+      drawSheet();
+      var n=document.getElementById("line_"+st.id);
+      if(n){ try{ n.focus(); n.setSelectionRange(n.value.length,n.value.length); }catch(e){} }
+    };
+    row.appendChild(fix);
+    box.appendChild(row);
+    if(ns.s==="saved") box.appendChild(el("div","note-st ok","✓ 저장됐어요"));
+    return box;
+  }
+
+  var row2=el("div","noterow");
+  var inp=document.createElement("input");
+  inp.value=ns.draft!=null?ns.draft:txt; inp.placeholder="한 줄 쓰기"; inp.maxLength=60; inp.id="line_"+st.id;
+  var save=el("button","btn sm", ns.s==="saving"?"저장 중…":"저장");
+  save.disabled=ns.s==="saving";
+  row2.appendChild(inp); row2.appendChild(save);
+  box.appendChild(row2);
+
+  var stEl=el("div","note-st");
+  if(ns.s==="error"){ stEl.className="note-st err"; stEl.textContent="저장하지 못했어요. 다시 눌러주세요."; }
+  else if(ns.s!=="saving" && ns.draft!=null && ns.draft.trim()!==txt){ stEl.textContent="아직 저장 안 됐어요"; }
+  box.appendChild(stEl);
+  if(txt){
+    var cancel=el("button","fixlink","취소");
+    cancel.onclick=function(){ noteState[st.id]={}; drawSheet(); };
+    stEl.after(cancel);
+  }
+
+  inp.oninput=function(){
+    var cur=noteState[st.id]||{};
+    noteState[st.id]={edit:true,draft:inp.value,s:cur.s==="saving"?"saving":null};
+    stEl.className="note-st";
+    stEl.textContent = inp.value.trim()!==txt ? "아직 저장 안 됐어요" : "";
+  };
+  inp.onkeydown=function(e){ if(e.key==="Enter" && !e.isComposing){ e.preventDefault(); doSave(); } };
+  save.onclick=doSave;
+
+  function doSave(){
+    if((noteState[st.id]||{}).s==="saving") return;
+    var v=inp.value.trim();
+    if(v===txt){ noteState[st.id]= v ? {} : {edit:true,draft:inp.value}; drawSheet(); return; }
+    noteState[st.id]={edit:true,draft:inp.value,s:"saving"};
+    save.disabled=true; save.textContent="저장 중…";
+    stEl.className="note-st"; stEl.textContent="";
+    // guard() 는 다른 저장이 돌고 있으면 말없이 건너뛴다 — 한 줄은 그러면 안 된다.
+    Promise.resolve().then(function(){ return DATA.setNote(st.id,mid,v); }).then(function(){
+      noteState[st.id]= v ? {s:"saved"} : {};
+      if(sheet && sheet.id===st.id) drawSheet();
+      // "저장됐어요" 는 잠깐만 보여준다
+      setTimeout(function(){
+        if((noteState[st.id]||{}).s!=="saved") return;
+        noteState[st.id]={};
+        if(sheet && sheet.id===st.id && !typingInSheet()) drawSheet();
+      },2500);
+      if(!v) toast("한 줄을 지웠어요.");
+    },function(){
+      noteState[st.id]={edit:true,draft:inp.value,s:"error"};
+      if(sheet && sheet.id===st.id) drawSheet();
+    });
+  }
+  return box;
+}
+
 function sheetDetail(h,body){
   var st=stamps().filter(function(s){ return s.id===sheet.id; })[0];
   if(!st){ body.appendChild(el("div","empty","우표를 찾을 수 없어요.")); return; }
@@ -1360,20 +1437,7 @@ function sheetDetail(h,body){
     it.appendChild(who);
     var txt=DATA.noteOf(st.id,m.id);
     if(m.id===me){
-      var inp=document.createElement("input");
-      inp.value=txt; inp.placeholder="한 줄 쓰기"; inp.maxLength=60; inp.id="line_"+st.id;
-      var timer=null, saved=txt;
-      function save(){
-        clearTimeout(timer);
-        var v=inp.value.trim();
-        if(v===saved) return;
-        saved=v;
-        guard(function(){ return DATA.setNote(st.id,m.id,v); });
-      }
-      // 치는 동안에는 미루고, 칸을 떠날 때는 확실히 저장한다.
-      inp.oninput=function(){ clearTimeout(timer); timer=setTimeout(save,1200); };
-      inp.onblur=save;
-      it.appendChild(inp);
+      it.appendChild(myNoteEl(st,m.id,txt));
     }else{
       it.appendChild(el("div","txt"+(txt?"":" none"),txt||"—"));
     }
