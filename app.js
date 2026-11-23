@@ -51,6 +51,32 @@ function hashGid(){
 function groupLink(){
   return location.href.split("#")[0] + "#g=" + DATA.gid;
 }
+/* 우표 하나를 가리키는 링크 — .../joahoe/#g=<모임키>&s=<우표id>
+ * 받은 사람이 열면 그 우표가 바로 펼쳐진다. */
+function hashStamp(){
+  var m=String(location.hash||"").match(/[#&]s=([A-Za-z0-9_-]+)/);
+  return m ? m[1] : "";
+}
+function stampLink(st){
+  return location.href.split("#")[0] + "#g=" + (st.gid||DATA.gid) + "&s=" + st.id;
+}
+function copyText(text,okMsg){
+  function fallback(){ try{ window.prompt("이 링크를 복사하세요", text); }catch(e){ toast("주소창의 링크를 복사해주세요."); } }
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(function(){ toast(okMsg); }, fallback);
+  }else fallback();
+}
+var pendingStamp = "";   // 링크로 들어온 우표. 데이터가 오고 이름을 고른 뒤에 연다.
+function openPendingStamp(){
+  if(!pendingStamp) return;
+  var id=pendingStamp; pendingStamp="";
+  // 한 번 열었으면 주소에서는 빼 둔다 — 새로고침할 때마다 다시 열리지 않게
+  try{ history.replaceState(null,"",location.pathname+location.search+"#g="+DATA.gid); }catch(e){}
+  if(stamps().some(function(s){ return s.id===id; })){
+    tab="album";
+    openSheet({k:"detail",id:id});
+  }else toast("그 우표를 찾을 수 없어요. 지워졌을 수도 있어요.");
+}
 var AREA_UNSET = "동네 미지정";
 
 var me = null;
@@ -502,6 +528,7 @@ function render(){
   $("#wishN").textContent=wn?String(wn):"";
 
   main.appendChild(tab==="album"?viewAlbum():tab==="wish"?viewWish():viewMap());
+  if(pendingStamp) setTimeout(openPendingStamp,0);
 }
 
 function viewBoot(st){
@@ -1371,6 +1398,10 @@ function sheetDetail(h,body){
     r.appendChild(back);
   }
   f.appendChild(r);
+
+  var ln=el("button","btn ghost sm","🔗 이 우표 링크 복사");
+  ln.onclick=function(){ copyText(stampLink(st),"우표 링크를 복사했어요."); };
+  f.appendChild(ln);
 
   if(isAdmin() && st.artPath){
     var isRef=(settings().refStampIds||[]).indexOf(st.id)>=0;
@@ -2323,9 +2354,11 @@ me=lsGet(LS_ME);
 // 주소에 모임이 담겨 있으면 그게 이긴다. 없으면 지난번에 보던 모임.
 DATA.gid=hashGid()||lsGet(LS_GID)||"app";
 if(hashGid()) lsSet(LS_GID,DATA.gid);
+pendingStamp=hashStamp();
 window.addEventListener("hashchange",function(){
   var g=hashGid();
-  if(!g || g===DATA.gid) return;
+  pendingStamp=hashStamp();
+  if(!g || g===DATA.gid){ if(pendingStamp && DATA.state==="ok") render(); return; }
   DATA.setGid(g); lsSet(LS_GID,g);
   if(!members().some(function(m){ return m.id===me; })){ me=null; lsSet(LS_ME,""); }
   selPin=null; tab="album"; mapWhole=false; kmapSig="";
